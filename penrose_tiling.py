@@ -424,7 +424,7 @@ def main():
     })
     
     # Iterasi 1-3
-    for it in range(1, 6):
+    for it in range(1, 4):
         print(f"\n=== Iteration {it} ===")
         penrose.deflate_once()
         
@@ -450,10 +450,10 @@ def main():
     legend_elements = [
         Line2D([0], [0], color='blue', linewidth=2.5, 
                 marker='>', markersize=8, markerfacecolor='darkblue',
-                label='Single Arrow (72°)'),
+                label='Single Arrow'),
         Line2D([0], [0], color='red', linewidth=2.5, 
                 marker='>', markersize=8, markerfacecolor='darkred',
-                label='Double Arrow (36°)')
+                label='Double Arrow')
     ]
     axes[0].legend(handles=legend_elements, loc='upper right', fontsize=11)
     
