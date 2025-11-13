@@ -686,8 +686,8 @@ def main() -> None:
         'E': E
     })
     
-    # Iterasi 1-3
-    for it in range(1, 4):
+    # Iterasi 1-5
+    for it in range(1, 6):
         print(f"\n=== Iteration {it} ===")
         penrose.deflate_once()
         
