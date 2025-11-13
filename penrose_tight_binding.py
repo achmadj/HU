@@ -497,8 +497,6 @@ class PenroseTightBinding:
                           s=sizes[indices_B], c='blue', 
                           alpha=1.0, edgecolors='black', linewidth=0.5, zorder=3)
         
-        plt.colorbar(sc, ax=ax, label='$|\\Psi_i|^2$ (Probability Density)')
-        
         # Tambahkan info di title
         ax.set_title(f"State {state_index}: E={energy:.4f}\n" + 
                     f"PR={participation_ratio:.1f}/{self.N}", 
