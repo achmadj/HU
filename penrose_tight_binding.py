@@ -302,6 +302,71 @@ class PenroseTightBinding:
         
         plt.close()
     
+    def compute_bipartite_sublattices(self) -> Dict[int, str]:
+        """
+        Hitung pembagian sublattice A dan B menggunakan BFS (Breadth-First Search).
+        Kisi Penrose adalah bipartite, sehingga bisa dibagi menjadi dua sublattice
+        di mana tidak ada edge yang menghubungkan situs dalam sublattice yang sama.
+        
+        Output:
+            Dict[int, str]: Peta site_id → 'A' atau 'B'
+        """
+        from collections import deque
+        
+        # 1. Buat adjacency list (undirected)
+        adjacency = {i: set() for i in range(self.N)}
+        for (i, j) in self.edges.keys():
+            adjacency[i].add(j)
+            adjacency[j].add(i)  # undirected
+        
+        # 2. Inisialisasi sublattice map
+        sublattice_map = {}  # site_id -> 'A' or 'B'
+        
+        # 3. BFS untuk pewarnaan
+        queue = deque()
+        
+        # Mulai dari situs 0
+        start_node = 0
+        sublattice_map[start_node] = 'A'
+        queue.append(start_node)
+        
+        # BFS traversal
+        while queue:
+            u = queue.popleft()
+            label_u = sublattice_map[u]
+            opposite_label = 'B' if label_u == 'A' else 'A'
+            
+            # Iterasi semua tetangga u
+            for v in adjacency[u]:
+                if v not in sublattice_map:
+                    # Belum dilihat, beri label lawan
+                    sublattice_map[v] = opposite_label
+                    queue.append(v)
+                else:
+                    # Sudah memiliki label, cek konsistensi (untuk validasi)
+                    if sublattice_map[v] == label_u:
+                        # Konflik! Tidak bipartite (seharusnya tidak terjadi untuk Penrose)
+                        print(f"WARNING: Graph is not bipartite! Conflict at edge ({u}, {v})")
+        
+        # Handle disconnected components (jika ada)
+        for i in range(self.N):
+            if i not in sublattice_map:
+                # Pulau terputus, mulai BFS baru
+                sublattice_map[i] = 'A'
+                queue.append(i)
+                
+                while queue:
+                    u = queue.popleft()
+                    label_u = sublattice_map[u]
+                    opposite_label = 'B' if label_u == 'A' else 'A'
+                    
+                    for v in adjacency[u]:
+                        if v not in sublattice_map:
+                            sublattice_map[v] = opposite_label
+                            queue.append(v)
+        
+        return sublattice_map
+    
     def analyze_wavefunction(self, state_index: int) -> Dict[str, any]:
         """
         Analisis wavefunction untuk state tertentu
@@ -363,32 +428,74 @@ class PenroseTightBinding:
         # Ambil koordinat x, y dari dictionary vertices
         # Pastikan urutannya sesuai dengan indeks 0...N-1
         coords = np.array([self.vertices[i] for i in range(self.N)])
-        x_coords = coords[:, 0]
-        y_coords = coords[:, 1]
+        
+        # Rotasi 36 derajat searah jarum jam (clockwise = negative angle)
+        theta = -18.0  # derajat
+        theta_rad = np.deg2rad(theta)
+        cos_theta = np.cos(theta_rad)
+        sin_theta = np.sin(theta_rad)
+        
+        # Matriks rotasi 2D
+        rotation_matrix = np.array([[cos_theta, -sin_theta],
+                                     [sin_theta, cos_theta]])
+        
+        # Rotasikan semua koordinat vertex untuk plotting
+        coords_rotated = coords @ rotation_matrix.T
+        x_coords = coords_rotated[:, 0]
+        y_coords = coords_rotated[:, 1]
         
         # 3. Plot Distribusi
         # Plot semua edges kisi sebagai latar belakang (abu-abu tipis)
+        # Rotasi koordinat edges juga
         for (i, j), _ in self.edges.items():
             v_i = self.vertices[i]
             v_j = self.vertices[j]
-            ax.plot([v_i[0], v_j[0]], [v_i[1], v_j[1]], 
+            # Rotasi koordinat edges
+            v_i_rot = rotation_matrix @ v_i
+            v_j_rot = rotation_matrix @ v_j
+            ax.plot([v_i_rot[0], v_j_rot[0]], [v_i_rot[1], v_j_rot[1]], 
                    color='gray', linewidth=0.3, alpha=0.3, zorder=1)
 
+        # Hitung pembagian bipartite sublattice (A dan B)
+        sublattice_map = self.compute_bipartite_sublattices()
+        
         # Normalisasi prob_density agar plot terlihat bagus
         # Gunakan ukuran (s) dan warna (c) untuk merepresentasikan probabilitas
-        # Threshold untuk membedakan probabilitas rendah vs tinggi
-        threshold = 1e-32  # threshold eksak
+        # Threshold untuk ukuran: wf < 1e-15 sangat kecil, wf > 1e-2 besar
+        size_threshold = 1e-16
+        color_threshold = 1e-7
         
-        # Ukuran berbeda untuk dua kategori: kecil untuk < threshold, seragam untuk >= threshold
-        sizes = np.where(prob_density < threshold,
-                        0.5 + prob_density * size_scale * 0.2,  # kecil untuk prob < threshold (scaling)
-                        3.0)  # ukuran seragam untuk prob >= threshold
-        colors = prob_density
+        # Ukuran: sangat kecil untuk < 1e-15, normal untuk 1e-15 to 1e-2, besar untuk >= 1e-2
+        sizes = np.where(prob_density < size_threshold, 0.01,
+                        np.where(prob_density >= color_threshold, 27.0, 1.0))
         
-        # Plot scatter plot untuk probabilitas
-        sc = ax.scatter(x_coords, y_coords, s=sizes, c=colors, 
+        # Plot scatter plot untuk semua titik dengan cmap 'hot'
+        sc = ax.scatter(x_coords, y_coords, s=sizes, c=prob_density, 
                        cmap='hot', alpha=0.8, edgecolors='black', 
                        linewidth=0.3, zorder=2, vmin=0, vmax=np.max(prob_density))
+        
+        # Plot titik dengan prob >= threshold dengan warna berdasarkan sublattice
+        # Sublattice A: merah, Sublattice B: biru
+        high_prob_mask = prob_density >= color_threshold
+        if np.any(high_prob_mask):
+            # Pisahkan berdasarkan sublattice
+            high_prob_indices = np.where(high_prob_mask)[0]
+            
+            # Sublattice A (merah)
+            sublattice_A_mask = np.array([sublattice_map[i] == 'A' for i in high_prob_indices])
+            if np.any(sublattice_A_mask):
+                indices_A = high_prob_indices[sublattice_A_mask]
+                ax.scatter(x_coords[indices_A], y_coords[indices_A], 
+                          s=sizes[indices_A], c='red', 
+                          alpha=1.0, edgecolors='black', linewidth=0.5, zorder=3)
+            
+            # Sublattice B (biru)
+            sublattice_B_mask = np.array([sublattice_map[i] == 'B' for i in high_prob_indices])
+            if np.any(sublattice_B_mask):
+                indices_B = high_prob_indices[sublattice_B_mask]
+                ax.scatter(x_coords[indices_B], y_coords[indices_B], 
+                          s=sizes[indices_B], c='blue', 
+                          alpha=1.0, edgecolors='black', linewidth=0.5, zorder=3)
         
         plt.colorbar(sc, ax=ax, label='$|\\Psi_i|^2$ (Probability Density)')
         
@@ -499,7 +606,7 @@ def main() -> None:
     
     plt.tight_layout(rect=[0, 0.03, 1, 0.96])
     wavefunction_filename = 'penrose_wavefunctions.png'
-    plt.savefig(wavefunction_filename, dpi=200, bbox_inches='tight')
+    plt.savefig(wavefunction_filename, dpi=500, bbox_inches='tight')
     print(f"  ✓ Saved wavefunction plots: {wavefunction_filename}")
     plt.close()
     
