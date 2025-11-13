@@ -421,6 +421,10 @@ def plot_overlapping_iterations(state0, state1, ax, show_arrows=False):
     vertices1 = state1['vertices']
     edges1 = state1['edges']
     
+    # Golden ratio untuk scaling
+    phi = (1 + np.sqrt(5)) / 2
+    phi_inv = 1 / phi
+    
     # Plot edges iterasi 0 (hitam)
     for (i, j), arrow_type in edges0.items():
         x1, y1 = vertices0[i]
@@ -430,10 +434,10 @@ def plot_overlapping_iterations(state0, state1, ax, show_arrows=False):
                 color='black', linewidth=1.5, alpha=0.7, zorder=1,
                 label='_nolegend_')
     
-    # Plot edges iterasi 1 (merah)
+    # Plot edges iterasi 1 (merah) - scaled dengan phi^-1
     for (i, j), arrow_type in edges1.items():
-        x1, y1 = vertices1[i]
-        x2, y2 = vertices1[j]
+        x1, y1 = vertices1[i] * phi_inv
+        x2, y2 = vertices1[j] * phi_inv
         
         ax.plot([x1, x2], [y1, y2], 
                 color='red', linewidth=1.5, alpha=0.7, zorder=2,
@@ -445,9 +449,9 @@ def plot_overlapping_iterations(state0, state1, ax, show_arrows=False):
     ax.scatter(xs0, ys0, c='black', s=20, zorder=5, alpha=0.8,
                 edgecolors='white', linewidths=0.5)
     
-    # Plot vertices iterasi 1 (merah)
-    xs1 = [pos[0] for pos in vertices1.values()]
-    ys1 = [pos[1] for pos in vertices1.values()]
+    # Plot vertices iterasi 1 (merah) - scaled dengan phi^-1
+    xs1 = [pos[0] * phi_inv for pos in vertices1.values()]
+    ys1 = [pos[1] * phi_inv for pos in vertices1.values()]
     ax.scatter(xs1, ys1, c='red', s=20, zorder=6, alpha=0.8,
                 edgecolors='white', linewidths=0.5)
     
@@ -455,7 +459,7 @@ def plot_overlapping_iterations(state0, state1, ax, show_arrows=False):
     ax.set_aspect('equal')
     ax.grid(True, alpha=0.2, linestyle='--')
     
-    title = f"Iteration 0 (Black) & Iteration 1 (Red) Overlapped\n"
+    title = f"Iteration 0 (Black) & Iteration 1 (Red, scaled φ⁻¹) Overlapped\n"
     title += f"Iter 0: N={state0['N']}, E={state0['E']} | "
     title += f"Iter 1: N={state1['N']}, E={state1['E']}"
     
