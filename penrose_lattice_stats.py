@@ -326,9 +326,12 @@ def main() -> None:
     }]
     
     # Iterasi 1-3
+    import time
     for iteration in range(1, 6):
         print(f"\n[Iteration {iteration}] Performing deflation...")
+        t0 = time.time()
         penrose.deflate_once()
+        t1 = time.time()
         
         N, E = penrose.get_statistics()
         single, double = penrose.get_edge_type_count()
@@ -341,6 +344,7 @@ def main() -> None:
         print(f"    - Double arrows:  {double}")
         print(f"  ✓ Bounding box: x ∈ [{x_min:.3f}, {x_max:.3f}], y ∈ [{y_min:.3f}, {y_max:.3f}]")
         print(f"  ✓ Avg edge length: {avg_edge:.6f}")
+        print(f"  ⏱️  Time: {(t1-t0)*1000:.2f} ms")
         
         stats.append({
             'iteration': iteration,

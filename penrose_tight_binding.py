@@ -158,14 +158,13 @@ class PenroseTightBinding:
         # Diagonalisasi menggunakan numpy.linalg.eigh (untuk Hermitian matrix)
         eigenvalues, eigenvectors = np.linalg.eigh(self.hamiltonian)
         
-        # Sort by eigenvalue (ascending)
-        sort_indices = np.argsort(eigenvalues)
-        self.eigenvalues = eigenvalues[sort_indices]
-        self.eigenvectors = eigenvectors[:, sort_indices]
+        # Tidak diurutkan ulang, gunakan urutan dari eigh() langsung
+        self.eigenvalues = eigenvalues
+        self.eigenvectors = eigenvectors
         
         print(f"  ✓ Found {len(self.eigenvalues)} eigenvalues")
-        print(f"  ✓ Energy range: [{self.eigenvalues[0]:.6f}, {self.eigenvalues[-1]:.6f}]")
-        print(f"  ✓ Energy bandwidth: {self.eigenvalues[-1] - self.eigenvalues[0]:.6f}")
+        print(f"  ✓ Energy range: [{np.min(self.eigenvalues):.6f}, {np.max(self.eigenvalues):.6f}]")
+        print(f"  ✓ Energy bandwidth: {np.max(self.eigenvalues) - np.min(self.eigenvalues):.6f}")
     
     def get_density_of_states(self, bins: int = 100) -> Tuple[NDArray[np.float64], NDArray[np.float64]]:
         """
@@ -194,7 +193,7 @@ class PenroseTightBinding:
             'min_energy': float(np.min(self.eigenvalues)),
             'max_energy': float(np.max(self.eigenvalues)),
             'bandwidth': float(np.max(self.eigenvalues) - np.min(self.eigenvalues)),
-            'zero_energy_count': int(np.sum(np.abs(self.eigenvalues) < 1e-10))
+            'zero_energy_count': int(np.sum(np.abs(self.eigenvalues) < 1e-12))
         }
     
     def plot_energy_spectrum(self, save_fig: bool = True, filename: str = 'penrose_energy_spectrum.png') -> None:
@@ -337,6 +336,68 @@ class PenroseTightBinding:
             'max_amplitude': float(max_amplitude),
             'normalization': float(np.sum(prob_density))
         }
+    
+    def plot_wavefunction(self, state_index: int, ax: plt.Axes, 
+                         size_scale: float = 500.0) -> None:
+        """
+        Plot distribusi probabilitas wavefunction (|Ψ|²) untuk state tertentu.
+        
+        Input:
+            state_index (int): Index dari state (0 = ground state, N//2 = mid-state, dll.)
+            ax (plt.Axes): Axis matplotlib untuk plotting
+            size_scale (float): Faktor untuk skala ukuran titik plot
+        """
+        if state_index < 0 or state_index >= self.N:
+            raise ValueError(f"State index harus dalam rentang [0, {self.N-1}]")
+            
+        # 1. Dapatkan Wavefunction (Eigenvector)
+        psi: NDArray[np.float64] = self.eigenvectors[:, state_index]
+        energy: float = self.eigenvalues[state_index]
+        
+        # 2. Dapatkan Distribusi (Probabilitas)
+        prob_density: NDArray[np.float64] = np.abs(psi)**2
+        
+        # Hitung participation ratio untuk menampilkan info lokalisasi
+        participation_ratio: float = 1.0 / np.sum(prob_density**2)
+        
+        # Ambil koordinat x, y dari dictionary vertices
+        # Pastikan urutannya sesuai dengan indeks 0...N-1
+        coords = np.array([self.vertices[i] for i in range(self.N)])
+        x_coords = coords[:, 0]
+        y_coords = coords[:, 1]
+        
+        # 3. Plot Distribusi
+        # Plot semua edges kisi sebagai latar belakang (abu-abu tipis)
+        for (i, j), _ in self.edges.items():
+            v_i = self.vertices[i]
+            v_j = self.vertices[j]
+            ax.plot([v_i[0], v_j[0]], [v_i[1], v_j[1]], 
+                   color='gray', linewidth=0.3, alpha=0.3, zorder=1)
+
+        # Normalisasi prob_density agar plot terlihat bagus
+        # Gunakan ukuran (s) dan warna (c) untuk merepresentasikan probabilitas
+        # Threshold untuk membedakan probabilitas rendah vs tinggi
+        threshold = 1e-32  # threshold eksak
+        
+        # Ukuran berbeda untuk dua kategori: kecil untuk < threshold, seragam untuk >= threshold
+        sizes = np.where(prob_density < threshold,
+                        0.5 + prob_density * size_scale * 0.2,  # kecil untuk prob < threshold (scaling)
+                        3.0)  # ukuran seragam untuk prob >= threshold
+        colors = prob_density
+        
+        # Plot scatter plot untuk probabilitas
+        sc = ax.scatter(x_coords, y_coords, s=sizes, c=colors, 
+                       cmap='hot', alpha=0.8, edgecolors='black', 
+                       linewidth=0.3, zorder=2, vmin=0, vmax=np.max(prob_density))
+        
+        plt.colorbar(sc, ax=ax, label='$|\\Psi_i|^2$ (Probability Density)')
+        
+        # Tambahkan info di title
+        ax.set_title(f"State {state_index}: E={energy:.4f}\n" + 
+                    f"PR={participation_ratio:.1f}/{self.N}", 
+                    fontsize=11, fontweight='bold')
+        ax.set_aspect('equal')
+        ax.axis('off')
 
 
 def print_separator(char: str = "=", length: int = 80) -> None:
@@ -401,16 +462,14 @@ def main() -> None:
     print(f"  Energy: {ground_state['energy']:.6f}")
     print(f"  Participation ratio: {ground_state['participation_ratio']:.2f} / {tb_model.N}")
     print(f"  Max amplitude: {ground_state['max_amplitude']:.6f}")
-    print(f"  Localization: {'Localized' if ground_state['participation_ratio'] < tb_model.N/10 else 'Extended'}")
     
-    # Middle state
+    # Middle state (dekat E=0)
     mid_index = tb_model.N // 2
-    print(f"\n[Middle State (index={mid_index})]")
+    print(f"\n[Middle State (index={mid_index}, E≈0)]")
     mid_state = tb_model.analyze_wavefunction(mid_index)
     print(f"  Energy: {mid_state['energy']:.6f}")
     print(f"  Participation ratio: {mid_state['participation_ratio']:.2f} / {tb_model.N}")
     print(f"  Max amplitude: {mid_state['max_amplitude']:.6f}")
-    print(f"  Localization: {'Localized' if mid_state['participation_ratio'] < tb_model.N/10 else 'Extended'}")
     
     # Highest state
     print(f"\n[Highest State (index={tb_model.N-1})]")
@@ -418,12 +477,36 @@ def main() -> None:
     print(f"  Energy: {highest_state['energy']:.6f}")
     print(f"  Participation ratio: {highest_state['participation_ratio']:.2f} / {tb_model.N}")
     print(f"  Max amplitude: {highest_state['max_amplitude']:.6f}")
-    print(f"  Localization: {'Localized' if highest_state['participation_ratio'] < tb_model.N/10 else 'Extended'}")
+    
+    # Plot probability density untuk 3 states
+    print("\n")
+    print_separator()
+    print("GENERATING WAVEFUNCTION PLOTS")
+    print_separator()
+    
+    fig, axes = plt.subplots(1, 3, figsize=(21, 7))
+    fig.suptitle(f'Wavefunction Probability Density (N={tb_model.N}, Iteration={tb_model.iteration})', 
+                 fontsize=16, fontweight='bold')
+    
+    # Plot Ground State
+    tb_model.plot_wavefunction(0, axes[0])
+    
+    # Plot Middle State (E≈0)
+    tb_model.plot_wavefunction(mid_index, axes[1])
+    
+    # Plot Highest State
+    tb_model.plot_wavefunction(tb_model.N - 1, axes[2])
+    
+    plt.tight_layout(rect=[0, 0.03, 1, 0.96])
+    wavefunction_filename = 'penrose_wavefunctions.png'
+    plt.savefig(wavefunction_filename, dpi=200, bbox_inches='tight')
+    print(f"  ✓ Saved wavefunction plots: {wavefunction_filename}")
+    plt.close()
     
     print("\n")
     print_separator()
     print("✅ Tight binding analysis completed!")
-    print("📊 Energy spectrum, DOS, and IDOS plots generated")
+    print("📊 Energy spectrum, DOS, IDOS, and wavefunction plots generated")
     print_separator()
     print()
 
