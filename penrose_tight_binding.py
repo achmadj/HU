@@ -153,15 +153,26 @@ class PenroseTightBinding:
         Output:
             None (modifikasi self.eigenvalues dan self.eigenvectors in-place)
         """
+        import time
+        
         print(f"\n[DIAGONALIZATION] Solving eigenvalue problem...")
+        print(f"  Matrix size: {self.N}×{self.N} ({self.N**2:,} elements)")
+        print(f"  Starting diagonalization...")
+        
+        # Timer start
+        start_time = time.time()
         
         # Diagonalisasi menggunakan numpy.linalg.eigh (untuk Hermitian matrix)
         eigenvalues, eigenvectors = np.linalg.eigh(self.hamiltonian)
+        
+        # Timer end
+        elapsed_time = time.time() - start_time
         
         # Tidak diurutkan ulang, gunakan urutan dari eigh() langsung
         self.eigenvalues = eigenvalues
         self.eigenvectors = eigenvectors
         
+        print(f"  ✓ Diagonalization completed in {elapsed_time:.2f} seconds")
         print(f"  ✓ Found {len(self.eigenvalues)} eigenvalues")
         print(f"  ✓ Energy range: [{np.min(self.eigenvalues):.6f}, {np.max(self.eigenvalues):.6f}]")
         print(f"  ✓ Energy bandwidth: {np.max(self.eigenvalues) - np.min(self.eigenvalues):.6f}")
