@@ -478,7 +478,7 @@ class PenroseTightBinding:
         
         # Ukuran: sangat kecil untuk < 1e-15, normal untuk 1e-15 to 1e-2, besar untuk >= 1e-2
         sizes = np.where(prob_density < size_threshold, 0.01,
-                        np.where(prob_density >= color_threshold, 27.0, 1.0))
+                        np.where(prob_density >= color_threshold, 5.0, 1.0))
         
         # Plot scatter plot untuk semua titik dengan cmap 'hot'
         sc = ax.scatter(x_coords, y_coords, s=sizes, c=prob_density, 

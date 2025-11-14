@@ -523,8 +523,8 @@ def main():
         'time_ms': (t1-t0)*1000
     }]
     
-    # Iterasi 1-5
-    max_iterations = 6
+    # Iterasi 1-7
+    max_iterations = 7
     
     for iteration in range(1, max_iterations + 1):
         print(f"\n[Iteration {iteration}] Performing deflation...")
