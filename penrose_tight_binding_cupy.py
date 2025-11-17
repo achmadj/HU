@@ -394,6 +394,70 @@ def main() -> None:
         for i in zero_indices[:5]:
             print(f"    State {i}: E = {tb_model.eigenvalues[i]:.6f}")
     
+    # Analyze PR around E=0 (50 states above and below)
+    print(f"\n[Participation Ratio Analysis Around E=0]")
+    
+    # Find index closest to E=0
+    zero_idx = np.argmin(np.abs(tb_model.eigenvalues))
+    print(f"  State closest to E=0: index={zero_idx}, E={tb_model.eigenvalues[zero_idx]:.8f}")
+    
+    # Get 50 states below and 50 states above
+    idx_start = max(0, zero_idx - 50)
+    idx_end = min(tb_model.N, zero_idx + 51)
+    
+    print(f"\n  Analyzing states from index {idx_start} to {idx_end-1}")
+    print(f"  {'Index':<8} {'Energy':<15} {'PR':<12} {'PR%':<10} {'|ψ|²_max':<12}")
+    print("  " + "-" * 70)
+    
+    for idx in range(idx_start, idx_end):
+        state_info = tb_model.analyze_wavefunction(idx)
+        energy = state_info['energy']
+        pr = state_info['participation_ratio']
+        pr_percent = pr / tb_model.N * 100
+        max_amp = state_info['max_amplitude']
+        
+        # Mark the zero state
+        marker = " ← E≈0" if idx == zero_idx else ""
+        print(f"  {idx:<8} {energy:+.8f}   {pr:>10.1f}  {pr_percent:>8.2f}%  {max_amp:.6f}{marker}")
+    
+    # Summary statistics for regions
+    print(f"\n  Summary Statistics:")
+    
+    # Below E=0 (50 states)
+    below_start = max(0, zero_idx - 50)
+    below_end = zero_idx
+    if below_end > below_start:
+        below_prs = []
+        for idx in range(below_start, below_end):
+            state_info = tb_model.analyze_wavefunction(idx)
+            below_prs.append(state_info['participation_ratio'])
+        below_prs = np.array(below_prs)
+        print(f"\n  States BELOW E=0 (indices {below_start}-{below_end-1}):")
+        print(f"    Mean PR: {np.mean(below_prs):.1f} ({np.mean(below_prs)/tb_model.N*100:.2f}%)")
+        print(f"    Median PR: {np.median(below_prs):.1f} ({np.median(below_prs)/tb_model.N*100:.2f}%)")
+        print(f"    Min PR: {np.min(below_prs):.1f} ({np.min(below_prs)/tb_model.N*100:.2f}%)")
+        print(f"    Max PR: {np.max(below_prs):.1f} ({np.max(below_prs)/tb_model.N*100:.2f}%)")
+    
+    # At E≈0
+    state_zero = tb_model.analyze_wavefunction(zero_idx)
+    print(f"\n  State AT E≈0 (index {zero_idx}):")
+    print(f"    PR: {state_zero['participation_ratio']:.1f} ({state_zero['participation_ratio']/tb_model.N*100:.2f}%)")
+    
+    # Above E=0 (50 states)
+    above_start = zero_idx + 1
+    above_end = min(tb_model.N, zero_idx + 51)
+    if above_end > above_start:
+        above_prs = []
+        for idx in range(above_start, above_end):
+            state_info = tb_model.analyze_wavefunction(idx)
+            above_prs.append(state_info['participation_ratio'])
+        above_prs = np.array(above_prs)
+        print(f"\n  States ABOVE E=0 (indices {above_start}-{above_end-1}):")
+        print(f"    Mean PR: {np.mean(above_prs):.1f} ({np.mean(above_prs)/tb_model.N*100:.2f}%)")
+        print(f"    Median PR: {np.median(above_prs):.1f} ({np.median(above_prs)/tb_model.N*100:.2f}%)")
+        print(f"    Min PR: {np.min(above_prs):.1f} ({np.min(above_prs)/tb_model.N*100:.2f}%)")
+        print(f"    Max PR: {np.max(above_prs):.1f} ({np.max(above_prs)/tb_model.N*100:.2f}%)")
+    
     # Density of states info
     print(f"\n[Density of States]")
     hist, bin_edges = np.histogram(tb_model.eigenvalues, bins=50)
