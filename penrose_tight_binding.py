@@ -566,55 +566,64 @@ def main() -> None:
     tb_model.plot_density_of_states(bins=100, save_fig=True)
     tb_model.plot_integrated_dos(save_fig=True)
     
-    # Analisis beberapa states menarik
+    # Find zero-energy states (E ≈ 0)
     print("\n")
     print_separator()
-    print("WAVEFUNCTION ANALYSIS")
+    print("ZERO-ENERGY STATES ANALYSIS")
     print_separator()
     
-    # Ground state
-    print("\n[Ground State]")
-    ground_state = tb_model.analyze_wavefunction(0)
-    print(f"  Energy: {ground_state['energy']:.6f}")
-    print(f"  Participation ratio: {ground_state['participation_ratio']:.2f} / {tb_model.N}")
-    print(f"  Max amplitude: {ground_state['max_amplitude']:.6f}")
+    # Find states with |E| < threshold
+    energy_threshold = 1e-10
+    zero_energy_indices = np.where(np.abs(tb_model.eigenvalues) < energy_threshold)[0]
     
-    # Middle state (dekat E=0)
-    mid_index = tb_model.N // 2
-    print(f"\n[Middle State (index={mid_index}, E≈0)]")
-    mid_state = tb_model.analyze_wavefunction(mid_index)
-    print(f"  Energy: {mid_state['energy']:.6f}")
-    print(f"  Participation ratio: {mid_state['participation_ratio']:.2f} / {tb_model.N}")
-    print(f"  Max amplitude: {mid_state['max_amplitude']:.6f}")
+    print(f"\nFound {len(zero_energy_indices)} states with |E| < {energy_threshold}")
     
-    # Highest state
-    print(f"\n[Highest State (index={tb_model.N-1})]")
-    highest_state = tb_model.analyze_wavefunction(tb_model.N - 1)
-    print(f"  Energy: {highest_state['energy']:.6f}")
-    print(f"  Participation ratio: {highest_state['participation_ratio']:.2f} / {tb_model.N}")
-    print(f"  Max amplitude: {highest_state['max_amplitude']:.6f}")
+    if len(zero_energy_indices) == 0:
+        print("WARNING: No exact zero-energy states found!")
+        print("Searching for states closest to E=0...")
+        # Find closest states to E=0
+        abs_energies = np.abs(tb_model.eigenvalues)
+        sorted_indices = np.argsort(abs_energies)
+        zero_energy_indices = sorted_indices[:min(3, len(sorted_indices))]
+        print(f"Using {len(zero_energy_indices)} states closest to E=0")
     
-    # Plot probability density untuk 3 states
+    # Analyze each zero-energy state
+    for i, state_idx in enumerate(zero_energy_indices):
+        state_info = tb_model.analyze_wavefunction(state_idx)
+        print(f"\n[Zero-Energy State {i+1}, index={state_idx}]")
+        print(f"  Energy: {state_info['energy']:.10f}")
+        print(f"  Participation ratio: {state_info['participation_ratio']:.2f} / {tb_model.N}")
+        print(f"  Max amplitude: {state_info['max_amplitude']:.6f}")
+    
+    # Plot probability density for zero-energy states
     print("\n")
     print_separator()
-    print("GENERATING WAVEFUNCTION PLOTS")
+    print("GENERATING WAVEFUNCTION PLOTS (E=0 STATES)")
     print_separator()
     
-    fig, axes = plt.subplots(1, 3, figsize=(21, 7))
-    fig.suptitle(f'Wavefunction Probability Density (N={tb_model.N}, Iteration={tb_model.iteration})', 
+    num_states = len(zero_energy_indices)
+    if num_states == 1:
+        fig, axes = plt.subplots(1, 1, figsize=(7, 7))
+        axes = [axes]
+    elif num_states == 2:
+        fig, axes = plt.subplots(1, 2, figsize=(14, 7))
+    else:
+        # For 3 or more states, plot up to 3
+        num_states = min(num_states, 3)
+        fig, axes = plt.subplots(1, num_states, figsize=(7*num_states, 7))
+        if num_states == 1:
+            axes = [axes]
+    
+    fig.suptitle(f'Zero-Energy States (E≈0) - N={tb_model.N}, Iteration={tb_model.iteration}', 
                  fontsize=16, fontweight='bold')
     
-    # Plot Ground State
-    tb_model.plot_wavefunction(0, axes[0])
-    
-    # Plot Middle State (E≈0)
-    tb_model.plot_wavefunction(mid_index, axes[1])
-    
-    # Plot Highest State
-    tb_model.plot_wavefunction(tb_model.N - 1, axes[2])
+    # Plot each zero-energy state
+    for i in range(num_states):
+        state_idx = zero_energy_indices[i]
+        tb_model.plot_wavefunction(state_idx, axes[i])
     
     plt.tight_layout(rect=[0, 0.03, 1, 0.96])
-    wavefunction_filename = 'penrose_wavefunctions.png'
+    wavefunction_filename = 'penrose_wavefunctions_E0.png'
     plt.savefig(wavefunction_filename, dpi=500, bbox_inches='tight')
     print(f"  ✓ Saved wavefunction plots: {wavefunction_filename}")
     plt.close()
