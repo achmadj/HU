@@ -623,13 +623,13 @@ def main():
     }
     
     # Save as pickle
-    pickle_file = 'penrose_lattice_data.pkl'
+    pickle_file = 'data/penrose_lattice_data.pkl'
     with open(pickle_file, 'wb') as f:
         pickle.dump(data_to_save, f)
     print(f"  ✓ Saved to pickle: {pickle_file}")
     
     # Save as numpy arrays
-    npz_file = 'penrose_lattice_data.npz'
+    npz_file = 'data/penrose_lattice_data.npz'
     
     vertex_ids = np.arange(len(penrose.vertex_positions), dtype=np.int32)
     vertex_coords = np.array(penrose.vertex_positions, dtype=np.float64)
@@ -705,8 +705,8 @@ def main():
         plt.suptitle('Penrose Lattice - All Iterations (Fast Version)', 
                         fontsize=16, fontweight='bold', y=0.998)
         plt.tight_layout()
-        plt.savefig('penrose_all_iterations_fast.png', dpi=200, bbox_inches='tight')
-        print("  ✓ Saved plot: penrose_all_iterations_fast.png")
+        plt.savefig('imgs/penrose_all_iterations_fast.png', dpi=200, bbox_inches='tight')
+        print("  ✓ Saved plot: imgs/penrose_all_iterations_fast.png")
         
         # Plot 2: Iterasi 0 dan 1 tumpang tindih
         fig2, ax2 = plt.subplots(1, 1, figsize=(12, 12))
@@ -722,8 +722,8 @@ def main():
         ax2.legend(handles=legend_elements_2, loc='upper right', fontsize=11)
         
         plt.tight_layout()
-        plt.savefig('penrose_iter0_iter1_overlapped_fast.png', dpi=200, bbox_inches='tight')
-        print("  ✓ Saved plot: penrose_iter0_iter1_overlapped_fast.png")
+        plt.savefig('imgs/penrose_iter0_iter1_overlapped_fast.png', dpi=200, bbox_inches='tight')
+        print("  ✓ Saved plot: imgs/penrose_iter0_iter1_overlapped_fast.png")
         
         plt.close('all')
     

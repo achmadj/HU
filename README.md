@@ -6,6 +6,29 @@ Implementation of tight binding model for Penrose lattice using the deflation me
 
 ## File Structure
 
+### Directory Organization
+```
+/workspaces/HU/
+├── data/                          # Data files
+│   ├── penrose_lattice_data.pkl   # Lattice data (pickle format)
+│   └── penrose_lattice_data.npz   # Lattice data (numpy format)
+├── imgs/                          # Output images
+│   ├── penrose_all_iterations_fast.png
+│   ├── penrose_iter0_iter1_overlapped_fast.png
+│   ├── penrose_energy_spectrum.png
+│   ├── penrose_dos.png
+│   ├── penrose_idos.png
+│   ├── penrose_wavefunctions_E0.png
+│   ├── penrose_deflation.gif
+│   └── penrose_bfs_coloring.gif
+├── penrose_tiling_fast.py         # Lattice generator
+├── penrose_tight_binding.py       # Tight binding analysis (CPU)
+├── penrose_tight_binding_cupy.py  # Tight binding analysis (GPU)
+├── jupyter_penrose.ipynb          # Interactive notebook
+├── tight_binding_penrose_report.pdf  # Project report
+└── README.md                      # This file
+```
+
 ### 1. `penrose_tiling_fast.py`
 **Function**: Generate Penrose lattice using optimized deflation algorithm
 **Features**:
@@ -14,10 +37,10 @@ Implementation of tight binding model for Penrose lattice using the deflation me
 - Optional plotting with `--plot` flag
 
 **Output**: 
-- `penrose_lattice_data.pkl` - Data in pickle format
-- `penrose_lattice_data.npz` - Data in numpy format
-- `penrose_all_iterations_fast.png` - Plot of all iterations (if `--plot`)
-- `penrose_iter0_iter1_overlapped_fast.png` - Overlapped plot of iterations 0 and 1 (if `--plot`)
+- `data/penrose_lattice_data.pkl` - Data in pickle format
+- `data/penrose_lattice_data.npz` - Data in numpy format
+- `imgs/penrose_all_iterations_fast.png` - Plot of all iterations (if `--plot`)
+- `imgs/penrose_iter0_iter1_overlapped_fast.png` - Overlapped plot of iterations 0 and 1 (if `--plot`)
 
 **Saved data structure**:
 ```python
@@ -35,18 +58,19 @@ Implementation of tight binding model for Penrose lattice using the deflation me
 
 ### 2. `penrose_tight_binding.py`
 **Function**: Hamiltonian tight binding diagonalization with wavefunction analysis
-**Input**: `penrose_lattice_data.pkl` or `penrose_lattice_data.npz`
+**Input**: `data/penrose_lattice_data.pkl` or `data/penrose_lattice_data.npz`
 **Output**:
-- `penrose_energy_spectrum.png` - Energy spectrum plot (DPI 200)
-- `penrose_dos.png` - Density of States plot (DPI 200)
-- `penrose_idos.png` - Integrated Density of States plot (DPI 200)
-- `penrose_wavefunctions.png` - Wavefunction probability density plots (DPI 1000)
+- `imgs/penrose_energy_spectrum.png` - Energy spectrum plot (DPI 200)
+- `imgs/penrose_dos.png` - Density of States plot (DPI 200)
+- `imgs/penrose_idos.png` - Integrated Density of States plot (DPI 200)
+- `imgs/penrose_wavefunctions_E0.png` - Zero-energy wavefunction plots (DPI 500)
 
 **New Features**:
 - Bipartite sublattice detection (BFS algorithm)
 - Wavefunction visualization with sublattice coloring (red/blue)
 - Plot rotation -18° for optimal orientation
 - Threshold-based sizing for highlighting
+- Zero-energy state analysis and visualization
 
 ## Tight Binding Model
 
@@ -97,7 +121,7 @@ python penrose_tiling_fast.py --plot
 
 #### Example Output: Iteration 4
 
-![Penrose Lattice - All Iterations](penrose_all_iterations_fast.png)
+![Penrose Lattice - All Iterations](imgs/penrose_all_iterations_fast.png)
 
 The figure shows the first four iterations of the Penrose lattice construction using the deflation method. Each iteration multiplies the number of vertices by approximately $\phi^2 \approx 2.618$, where $\phi = \frac{1+\sqrt{5}}{2}$ is the golden ratio. Iteration 4 contains $N=596$ vertices and $E=1080$ edges, demonstrating the self-similar quasiperiodic structure characteristic of Penrose tilings.
 
@@ -107,8 +131,8 @@ python penrose_tight_binding.py
 ```
 
 Output includes:
-- Energy spectrum, DOS, and IDOS
-- Wavefunction plots for ground state, mid-state ($E \approx 0$), and highest state
+- Energy spectrum, DOS, and IDOS (saved to `imgs/`)
+- Wavefunction plots for zero-energy states (E≈0)
 - Bipartite sublattice visualization (red = A, blue = B)
 
 ## Mathematical Details

@@ -46,7 +46,7 @@ class PenroseTightBinding:
         self.phi: float = 0.0
         self.iteration: int = 0
     
-    def load_from_pickle(self, filename: str = 'penrose_lattice_data.pkl') -> None:
+    def load_from_pickle(self, filename: str = 'data/penrose_lattice_data.pkl') -> None:
         """
         Load data dari pickle file
         
@@ -207,7 +207,7 @@ class PenroseTightBinding:
             'zero_energy_count': int(np.sum(np.abs(self.eigenvalues) < 1e-12))
         }
     
-    def plot_energy_spectrum(self, save_fig: bool = True, filename: str = 'penrose_energy_spectrum.png') -> None:
+    def plot_energy_spectrum(self, save_fig: bool = True, filename: str = 'imgs/penrose_energy_spectrum.png') -> None:
         """
         Plot energy spectrum (eigenvalues vs index)
         
@@ -237,7 +237,7 @@ class PenroseTightBinding:
         plt.close()
     
     def plot_density_of_states(self, bins: int = 100, save_fig: bool = True, 
-                                filename: str = 'penrose_dos.png') -> None:
+                                filename: str = 'imgs/penrose_dos.png') -> None:
         """
         Plot Density of States (DOS)
         
@@ -270,7 +270,7 @@ class PenroseTightBinding:
         plt.close()
     
     def plot_integrated_dos(self, save_fig: bool = True, 
-                            filename: str = 'penrose_idos.png') -> None:
+                            filename: str = 'imgs/penrose_idos.png') -> None:
         """
         Plot Integrated Density of States (IDOS): N₀/N vs Energy
         
@@ -534,7 +534,7 @@ def main() -> None:
     tb_model = PenroseTightBinding(epsilon_0=0.0, t=1.0)
     
     # Load data (gunakan pickle)
-    tb_model.load_from_pickle('penrose_lattice_data.pkl')
+    tb_model.load_from_pickle('data/penrose_lattice_data.pkl')
     
     # Build Hamiltonian
     tb_model.build_hamiltonian()
@@ -623,7 +623,7 @@ def main() -> None:
         tb_model.plot_wavefunction(state_idx, axes[i])
     
     plt.tight_layout(rect=[0, 0.03, 1, 0.96])
-    wavefunction_filename = 'penrose_wavefunctions_E0.png'
+    wavefunction_filename = 'imgs/penrose_wavefunctions_E0.png'
     plt.savefig(wavefunction_filename, dpi=500, bbox_inches='tight')
     print(f"  ✓ Saved wavefunction plots: {wavefunction_filename}")
     plt.close()

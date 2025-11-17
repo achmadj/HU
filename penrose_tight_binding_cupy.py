@@ -64,7 +64,7 @@ class PenroseTightBindingGPU:
         if use_gpu and not CUPY_AVAILABLE:
             print("  ⚠️  GPU requested but CuPy not available, using CPU")
     
-    def load_from_pickle(self, filename: str = 'penrose_lattice_data.pkl') -> None:
+    def load_from_pickle(self, filename: str = 'data/penrose_lattice_data.pkl') -> None:
         """Load data dari pickle file"""
         print(f"\n[LOADING] Reading data from {filename}...")
         
@@ -321,9 +321,9 @@ def main() -> None:
     
     # Load data
     try:
-        tb_model.load_from_pickle('penrose_lattice_data.pkl')
+        tb_model.load_from_pickle('data/penrose_lattice_data.pkl')
     except FileNotFoundError:
-        print("\n✗ penrose_lattice_data.pkl not found")
+        print("\n✗ data/penrose_lattice_data.pkl not found")
         print("  Run penrose_tiling_fast.py first to generate data")
         return
     
