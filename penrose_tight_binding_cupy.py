@@ -351,120 +351,77 @@ def main() -> None:
     print(f"Bandwidth:            {stats['bandwidth']:12.6f}")
     print(f"Zero-energy states:   {stats['zero_energy_count']:12d}")
     
-    # Wavefunction analysis
+    # Build adjacency list to count neighbors
+    adjacency = {i: set() for i in range(tb_model.N)}
+    for (i, j) in tb_model.edges.keys():
+        adjacency[i].add(j)
+        adjacency[j].add(i)
+    
+    # Count coordination numbers
+    coordination_numbers = {i: len(adjacency[i]) for i in range(tb_model.N)}
+    
+    # Statistics
+    from collections import Counter
+    z_distribution = Counter(coordination_numbers.values())
+    
+    # Find zero-energy states (E ≈ 0)
+    energy_threshold = 1e-10
+    zero_energy_indices = np.where(np.abs(tb_model.eigenvalues) < energy_threshold)[0]
+    
+    if len(zero_energy_indices) == 0:
+        # Find closest states to E=0
+        abs_energies = np.abs(tb_model.eigenvalues)
+        sorted_indices = np.argsort(abs_energies)
+        zero_energy_indices = sorted_indices[:min(3, len(sorted_indices))]
+    
+    # Analyze electron localization at zero energy states
     print("\n")
     print_separator()
-    print("WAVEFUNCTION ANALYSIS")
+    print("ZERO MODE LOCALIZATION ANALYSIS")
     print_separator()
     
-    # Ground state
-    print("\n[Ground State]")
-    ground_state = tb_model.analyze_wavefunction(0)
-    print(f"  Energy: {ground_state['energy']:.6f}")
-    print(f"  Participation ratio: {ground_state['participation_ratio']:.2f} / {tb_model.N}")
-    print(f"  Max amplitude: {ground_state['max_amplitude']:.6f}")
-    print(f"  Normalization: {ground_state['normalization']:.9f}")
-    
-    # Middle state (E ≈ 0)
-    mid_index = tb_model.N // 2
-    print(f"\n[Middle State (index={mid_index}, E≈0)]")
-    mid_state = tb_model.analyze_wavefunction(mid_index)
-    print(f"  Energy: {mid_state['energy']:.6f}")
-    print(f"  Participation ratio: {mid_state['participation_ratio']:.2f} / {tb_model.N}")
-    print(f"  Max amplitude: {mid_state['max_amplitude']:.6f}")
-    print(f"  Normalization: {mid_state['normalization']:.9f}")
-    
-    # Highest state
-    print(f"\n[Highest State (index={tb_model.N-1})]")
-    highest_state = tb_model.analyze_wavefunction(tb_model.N - 1)
-    print(f"  Energy: {highest_state['energy']:.6f}")
-    print(f"  Participation ratio: {highest_state['participation_ratio']:.2f} / {tb_model.N}")
-    print(f"  Max amplitude: {highest_state['max_amplitude']:.6f}")
-    print(f"  Normalization: {highest_state['normalization']:.9f}")
-    
-    # Find states near E=0
-    print(f"\n[States near E=0]")
-    near_zero = np.abs(tb_model.eigenvalues) < 0.1
-    zero_count = np.sum(near_zero)
-    print(f"  Number of states with |E| < 0.1: {zero_count}")
-    
-    if zero_count > 0:
-        zero_indices = np.where(near_zero)[0]
-        print(f"  First 5 states near zero:")
-        for i in zero_indices[:5]:
-            print(f"    State {i}: E = {tb_model.eigenvalues[i]:.6f}")
-    
-    # Analyze PR around E=0 (50 states above and below)
-    print(f"\n[Participation Ratio Analysis Around E=0]")
-    
-    # Find index closest to E=0
-    zero_idx = np.argmin(np.abs(tb_model.eigenvalues))
-    print(f"  State closest to E=0: index={zero_idx}, E={tb_model.eigenvalues[zero_idx]:.8f}")
-    
-    # Get 50 states below and 50 states above
-    idx_start = max(0, zero_idx - 50)
-    idx_end = min(tb_model.N, zero_idx + 51)
-    
-    print(f"\n  Analyzing states from index {idx_start} to {idx_end-1}")
-    print(f"  {'Index':<8} {'Energy':<15} {'PR':<12} {'PR%':<10} {'|ψ|²_max':<12}")
-    print("  " + "-" * 70)
-    
-    for idx in range(idx_start, idx_end):
-        state_info = tb_model.analyze_wavefunction(idx)
-        energy = state_info['energy']
-        pr = state_info['participation_ratio']
-        pr_percent = pr / tb_model.N * 100
-        max_amp = state_info['max_amplitude']
+    if len(zero_energy_indices) > 0:
+        print(f"\nAnalyzing {len(zero_energy_indices)} states with E ≈ 0...")
         
-        # Mark the zero state
-        marker = " ← E≈0" if idx == zero_idx else ""
-        print(f"  {idx:<8} {energy:+.8f}   {pr:>10.1f}  {pr_percent:>8.2f}%  {max_amp:.6f}{marker}")
-    
-    # Summary statistics for regions
-    print(f"\n  Summary Statistics:")
-    
-    # Below E=0 (50 states)
-    below_start = max(0, zero_idx - 50)
-    below_end = zero_idx
-    if below_end > below_start:
-        below_prs = []
-        for idx in range(below_start, below_end):
-            state_info = tb_model.analyze_wavefunction(idx)
-            below_prs.append(state_info['participation_ratio'])
-        below_prs = np.array(below_prs)
-        print(f"\n  States BELOW E=0 (indices {below_start}-{below_end-1}):")
-        print(f"    Mean PR: {np.mean(below_prs):.1f} ({np.mean(below_prs)/tb_model.N*100:.2f}%)")
-        print(f"    Median PR: {np.median(below_prs):.1f} ({np.median(below_prs)/tb_model.N*100:.2f}%)")
-        print(f"    Min PR: {np.min(below_prs):.1f} ({np.min(below_prs)/tb_model.N*100:.2f}%)")
-        print(f"    Max PR: {np.max(below_prs):.1f} ({np.max(below_prs)/tb_model.N*100:.2f}%)")
-    
-    # At E≈0
-    state_zero = tb_model.analyze_wavefunction(zero_idx)
-    print(f"\n  State AT E≈0 (index {zero_idx}):")
-    print(f"    PR: {state_zero['participation_ratio']:.1f} ({state_zero['participation_ratio']/tb_model.N*100:.2f}%)")
-    
-    # Above E=0 (50 states)
-    above_start = zero_idx + 1
-    above_end = min(tb_model.N, zero_idx + 51)
-    if above_end > above_start:
-        above_prs = []
-        for idx in range(above_start, above_end):
-            state_info = tb_model.analyze_wavefunction(idx)
-            above_prs.append(state_info['participation_ratio'])
-        above_prs = np.array(above_prs)
-        print(f"\n  States ABOVE E=0 (indices {above_start}-{above_end-1}):")
-        print(f"    Mean PR: {np.mean(above_prs):.1f} ({np.mean(above_prs)/tb_model.N*100:.2f}%)")
-        print(f"    Median PR: {np.median(above_prs):.1f} ({np.median(above_prs)/tb_model.N*100:.2f}%)")
-        print(f"    Min PR: {np.min(above_prs):.1f} ({np.min(above_prs)/tb_model.N*100:.2f}%)")
-        print(f"    Max PR: {np.max(above_prs):.1f} ({np.max(above_prs)/tb_model.N*100:.2f}%)")
-    
-    # Density of states info
-    print(f"\n[Density of States]")
-    hist, bin_edges = np.histogram(tb_model.eigenvalues, bins=50)
-    max_dos_idx = np.argmax(hist)
-    max_dos_energy = (bin_edges[max_dos_idx] + bin_edges[max_dos_idx + 1]) / 2
-    print(f"  DOS peak at energy: {max_dos_energy:.6f}")
-    print(f"  DOS peak value: {hist[max_dos_idx]} states")
+        # Convert coordination_numbers dict to array
+        neighbor_counts = np.array([coordination_numbers[i] for i in range(tb_model.N)])
+        
+        # Get zero-energy eigenvectors (already in CPU from diagonalize())
+        zero_vectors = tb_model.eigenvectors[:, zero_energy_indices]
+        
+        # Calculate average probability density across all zero states
+        average_density = np.sum(np.abs(zero_vectors)**2, axis=1)
+        # Normalize to sum = 1
+        average_density /= np.sum(average_density)
+        
+        # Group by coordination number
+        total_probability_distribution = {}
+        for z in sorted(z_distribution.keys()):
+            mask = (neighbor_counts == z)
+            total_probability_distribution[z] = np.sum(average_density[mask])
+        
+        # Print results
+        print("\nElectron localization at E=0 by coordination number (z):")
+        print(f"{'z':<4} | {'Atom Population':<20} | {'Electron Localization':<20}")
+        print("-" * 50)
+        
+        for z in sorted(total_probability_distribution.keys()):
+            atom_count = z_distribution[z]
+            atom_percent = (atom_count / tb_model.N) * 100
+            electron_percent = total_probability_distribution[z] * 100
+            
+            print(f"{z:<4} | {atom_percent:6.2f}% | {electron_percent:6.2f}%")
+        
+        print("\nINTERPRETATION:")
+        val_z3 = total_probability_distribution.get(3, 0) * 100
+        if val_z3 > 80:
+            print(f"✓ CONFIRMED! Majority of electrons ({val_z3:.1f}%) localized at z=3 sites.")
+        elif val_z3 > 50:
+            print(f"→ Electrons prefer z=3 sites ({val_z3:.1f}%), but not exclusively.")
+        else:
+            print(f"⚠ UNCLEAR. Electrons distributed across sites (only {val_z3:.1f}% at z=3).")
+    else:
+        print("\nNo zero-energy states found for localization analysis.")
     
     # GPU memory cleanup
     if tb_model.use_gpu:

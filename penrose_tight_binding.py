@@ -146,6 +146,75 @@ class PenroseTightBinding:
         is_hermitian: bool = np.allclose(H, H.T)
         print(f"  ✓ Hermiticity check: {'PASSED' if is_hermitian else 'FAILED'}")
     
+    def save_hamiltonian_to_txt(self, filename: str = 'data/hamiltonian_matrix.txt') -> None:
+        """
+        Save Hamiltonian matrix to a formatted text file
+        
+        Input:
+            filename (str): Output filename
+        
+        Output:
+            None (writes to file)
+        """
+        print(f"\n[SAVING] Writing Hamiltonian matrix to {filename}...")
+        
+        with open(filename, 'w', encoding='utf-8') as f:
+            # Header
+            f.write("="*80 + "\n")
+            f.write("PENROSE LATTICE - TIGHT BINDING HAMILTONIAN MATRIX\n")
+            f.write("="*80 + "\n")
+            f.write(f"Matrix Size:        {self.N} × {self.N}\n")
+            f.write(f"Total Elements:     {self.N**2:,}\n")
+            f.write(f"On-site Energy ε₀:  {int(self.epsilon_0)}\n")
+            f.write(f"Hopping Parameter t: {int(self.t)}\n")
+            f.write(f"Iteration:          {self.iteration}\n")
+            f.write("="*80 + "\n\n")
+            
+            # Write matrix row by row with proper formatting
+            f.write("Hamiltonian Matrix H:\n")
+            f.write("(Format: H[row, col] as integers)\n\n")
+            
+            # Column headers
+            col_width = 4
+            f.write(" " * 8)  # Space for row label
+            for j in range(self.N):
+                f.write(f"{j:>{col_width}}")
+            f.write("\n")
+            f.write("-" * (8 + col_width * self.N) + "\n")
+            
+            # Matrix elements
+            for i in range(self.N):
+                f.write(f"Row {i:3d} |")
+                for j in range(self.N):
+                    val = self.hamiltonian[i, j]
+                    # Format as integers
+                    if abs(val) < 1e-10:
+                        f.write(f"{0:>{col_width}d}")
+                    else:
+                        f.write(f"{int(round(val)):>{col_width}d}")
+                f.write("\n")
+            
+            # Footer statistics
+            f.write("\n" + "="*80 + "\n")
+            f.write("MATRIX STATISTICS\n")
+            f.write("="*80 + "\n")
+            
+            # Count non-zero elements
+            non_zero = np.count_nonzero(np.abs(self.hamiltonian) > 1e-10)
+            diagonal_sum = np.sum(np.diag(self.hamiltonian))
+            off_diagonal = self.hamiltonian - np.diag(np.diag(self.hamiltonian))
+            off_diagonal_sum = np.sum(np.abs(off_diagonal))
+            
+            f.write(f"Non-zero elements:  {non_zero:,} ({non_zero/(self.N**2)*100:.2f}%)\n")
+            f.write(f"Diagonal sum:       {int(round(diagonal_sum))}\n")
+            f.write(f"Off-diagonal sum:   {int(round(off_diagonal_sum))}\n")
+            f.write(f"Matrix trace:       {np.trace(self.hamiltonian):.6f}\n")
+            f.write(f"Frobenius norm:     {np.linalg.norm(self.hamiltonian, 'fro'):.6f}\n")
+            f.write("="*80 + "\n")
+        
+        print(f"  ✓ Hamiltonian matrix saved to: {filename}")
+        print(f"  ✓ File size: {self.N} × {self.N} = {self.N**2:,} elements")
+    
     def diagonalize(self) -> None:
         """
         Diagonalisasi Hamiltonian untuk mendapatkan eigenvalues dan eigenvectors
@@ -188,6 +257,7 @@ class PenroseTightBinding:
             Tuple[NDArray, NDArray]: (energies, dos)
         """
         hist, bin_edges = np.histogram(self.eigenvalues, bins=bins, density=True)
+        hist = hist / np.sum(hist)  # Normalisasi DOS
         bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
         return bin_centers, hist
     
@@ -563,44 +633,82 @@ def main() -> None:
     print_separator()
     
     tb_model.plot_energy_spectrum(save_fig=True)
-    tb_model.plot_density_of_states(bins=100, save_fig=True)
+    tb_model.plot_density_of_states(bins=tb_model.N, save_fig=True)
     tb_model.plot_integrated_dos(save_fig=True)
+
+    # Build adjacency list to count neighbors
+    adjacency = {i: set() for i in range(tb_model.N)}
+    for (i, j) in tb_model.edges.keys():
+        adjacency[i].add(j)
+        adjacency[j].add(i)
+    
+    # Count coordination numbers
+    coordination_numbers = {i: len(adjacency[i]) for i in range(tb_model.N)}
+    
+    # Statistics
+    from collections import Counter
+    z_distribution = Counter(coordination_numbers.values())
     
     # Find zero-energy states (E ≈ 0)
-    print("\n")
-    print_separator()
-    print("ZERO-ENERGY STATES ANALYSIS")
-    print_separator()
-    
-    # Find states with |E| < threshold
-    energy_threshold = 1e-10
+    energy_threshold = 1e-7
     zero_energy_indices = np.where(np.abs(tb_model.eigenvalues) < energy_threshold)[0]
     
-    print(f"\nFound {len(zero_energy_indices)} states with |E| < {energy_threshold}")
-    
     if len(zero_energy_indices) == 0:
-        print("WARNING: No exact zero-energy states found!")
-        print("Searching for states closest to E=0...")
         # Find closest states to E=0
         abs_energies = np.abs(tb_model.eigenvalues)
         sorted_indices = np.argsort(abs_energies)
         zero_energy_indices = sorted_indices[:min(3, len(sorted_indices))]
-        print(f"Using {len(zero_energy_indices)} states closest to E=0")
     
-    # Analyze each zero-energy state
-    for i, state_idx in enumerate(zero_energy_indices):
-        state_info = tb_model.analyze_wavefunction(state_idx)
-        print(f"\n[Zero-Energy State {i+1}, index={state_idx}]")
-        print(f"  Energy: {state_info['energy']:.10f}")
-        print(f"  Participation ratio: {state_info['participation_ratio']:.2f} / {tb_model.N}")
-        print(f"  Max amplitude: {state_info['max_amplitude']:.6f}")
-    
-    # Plot probability density for zero-energy states
+    # Analyze electron localization at zero energy states
     print("\n")
     print_separator()
-    print("GENERATING WAVEFUNCTION PLOTS (E=0 STATES)")
+    print("ZERO MODE LOCALIZATION ANALYSIS")
     print_separator()
     
+    if len(zero_energy_indices) > 0:
+        print(f"\nAnalyzing {len(zero_energy_indices)} states with E ≈ 0...")
+        
+        # Convert coordination_numbers dict to array
+        neighbor_counts = np.array([coordination_numbers[i] for i in range(tb_model.N)])
+        
+        # Get zero-energy eigenvectors
+        zero_vectors = tb_model.eigenvectors[:, zero_energy_indices]
+        
+        # Calculate average probability density across all zero states
+        average_density = np.sum(np.abs(zero_vectors)**2, axis=1)
+        # Normalize to sum = 1
+        average_density /= np.sum(average_density)
+        
+        # Group by coordination number
+        total_probability_distribution = {}
+        for z in sorted(z_distribution.keys()):
+            mask = (neighbor_counts == z)
+            total_probability_distribution[z] = np.sum(average_density[mask])
+        
+        # Print results
+        print("\nElectron localization at E=0 by coordination number (z):")
+        print(f"{'z':<4} | {'Atom Population':<20} | {'Electron Localization':<20}")
+        print("-" * 50)
+        
+        for z in sorted(total_probability_distribution.keys()):
+            atom_count = z_distribution[z]
+            atom_percent = (atom_count / tb_model.N) * 100
+            electron_percent = total_probability_distribution[z] * 100
+            
+            print(f"{z:<4} | {atom_percent:6.2f}% | {electron_percent:6.2f}%")
+        
+        print("\nINTERPRETATION:")
+        val_z3 = total_probability_distribution.get(3, 0) * 100
+        if val_z3 > 80:
+            print(f"✓ CONFIRMED! Majority of electrons ({val_z3:.1f}%) localized at z=3 sites.")
+        elif val_z3 > 50:
+            print(f"→ Electrons prefer z=3 sites ({val_z3:.1f}%), but not exclusively.")
+        else:
+            print(f"⚠ UNCLEAR. Electrons distributed across sites (only {val_z3:.1f}% at z=3).")
+    else:
+        print("\nNo zero-energy states found for localization analysis.")
+    
+    # Plot probability density for zero-energy states
     num_states = len(zero_energy_indices)
     if num_states == 1:
         fig, axes = plt.subplots(1, 1, figsize=(7, 7))
