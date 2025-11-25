@@ -524,7 +524,7 @@ def main():
     }]
     
     # Iterasi 1-7
-    max_iterations = 6
+    max_iterations = 1
     
     for iteration in range(1, max_iterations + 1):
         print(f"\n[Iteration {iteration}] Performing deflation...")
