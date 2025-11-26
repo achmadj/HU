@@ -9,27 +9,49 @@ Implementation of tight binding model for Penrose lattice using the deflation me
 ### Directory Organization
 ```
 /workspaces/HU/
-├── data/                          # Data files
-│   ├── penrose_lattice_data.pkl   # Lattice data (pickle format)
-│   └── penrose_lattice_data.npz   # Lattice data (numpy format)
-├── imgs/                          # Output images
-│   ├── penrose_all_iterations_fast.png
-│   ├── penrose_iter0_iter1_overlapped_fast.png
-│   ├── penrose_energy_spectrum.png
-│   ├── penrose_dos.png
-│   ├── penrose_idos.png
-│   ├── penrose_wavefunctions_E0.png
-│   ├── penrose_deflation.gif
-│   └── penrose_bfs_coloring.gif
-├── penrose_tiling_fast.py         # Lattice generator
-├── penrose_tight_binding.py       # Tight binding analysis (CPU)
-├── penrose_tight_binding_cupy.py  # Tight binding analysis (GPU)
+├── center_model/                  # Center model (dual graph) calculations
+│   ├── data/                      # Center model data files
+│   │   ├── center_model_penrose_lattice.npz
+│   │   └── center_model_penrose_lattice.pkl
+│   ├── imgs/                      # Center model plots
+│   │   ├── center_wavefunctions_E2_gpu.png
+│   │   ├── lanczos_center_result.png
+│   │   └── vertex_vs_center_model.png
+│   ├── center_penrose_tiling_fast.py      # Center model generator
+│   ├── center_penrose_tight_binding.py    # Center TB (CPU)
+│   ├── center_penrose_tight_binding_cupy.py  # Center TB (GPU)
+│   ├── lanczos_center_tight_binding.py    # Lanczos for center model
+│   └── center_model.py                    # Visualization utilities
+├── vertex_model/                  # Vertex model calculations
+│   ├── data/                      # Vertex model data files
+│   │   ├── penrose_lattice_data.pkl
+│   │   ├── penrose_lattice_data.npz
+│   │   ├── penrose_lattice_iter0.npz
+│   │   └── ...iter1-7.npz
+│   ├── imgs/                      # Vertex model plots
+│   │   ├── gif/                   # Animation files
+│   │   │   ├── penrose_deflation.gif
+│   │   │   └── penrose_bfs_coloring.gif
+│   │   ├── penrose_energy_spectrum.png
+│   │   ├── penrose_dos.png
+│   │   ├── ldos_by_coordination.png
+│   │   └── ...other plots
+│   ├── penrose_tiling_fast.py             # Lattice generator
+│   ├── penrose_tight_binding.py           # Tight binding (CPU)
+│   ├── penrose_tight_binding_cupy.py      # Tight binding (GPU)
+│   ├── lanczos_tight_binding.py           # Lanczos method
+│   ├── finite_size_analysis_lanczos.py    # Finite size analysis
+│   └── finite_size_analysis_cupy.py       # GPU-accelerated analysis
 ├── jupyter_penrose.ipynb          # Interactive notebook
 ├── tight_binding_penrose_report.pdf  # Project report
 └── README.md                      # This file
 ```
 
-### 1. `penrose_tiling_fast.py`
+**Note**: All scripts have been updated to use the new directory structure. Run scripts from the project root directory `/workspaces/HU/`.
+
+### 1. Vertex Model Scripts
+
+#### `vertex_model/penrose_tiling_fast.py`
 **Function**: Generate Penrose lattice using optimized deflation algorithm
 **Features**:
 - Spatial hashing for O(1) vertex lookup (500x+ speedup)
@@ -37,10 +59,11 @@ Implementation of tight binding model for Penrose lattice using the deflation me
 - Optional plotting with `--plot` flag
 
 **Output**: 
-- `data/penrose_lattice_data.pkl` - Data in pickle format
-- `data/penrose_lattice_data.npz` - Data in numpy format
-- `imgs/penrose_all_iterations_fast.png` - Plot of all iterations (if `--plot`)
-- `imgs/penrose_iter0_iter1_overlapped_fast.png` - Overlapped plot of iterations 0 and 1 (if `--plot`)
+- `vertex_model/data/penrose_lattice_data.pkl` - Data in pickle format
+- `vertex_model/data/penrose_lattice_data.npz` - Data in numpy format
+- `vertex_model/data/penrose_lattice_iter{N}.npz` - Iteration-specific files (with `--save-all`)
+- `vertex_model/imgs/penrose_all_iterations_fast.png` - Plot of all iterations (if `--plot`)
+- `vertex_model/imgs/penrose_iter0_iter1_overlapped_fast.png` - Overlapped plot (if `--plot`)
 
 **Saved data structure**:
 ```python
@@ -56,14 +79,14 @@ Implementation of tight binding model for Penrose lattice using the deflation me
 }
 ```
 
-### 2. `penrose_tight_binding.py`
+#### `vertex_model/penrose_tight_binding.py`
 **Function**: Hamiltonian tight binding diagonalization with wavefunction analysis
-**Input**: `data/penrose_lattice_data.pkl` or `data/penrose_lattice_data.npz`
+**Input**: `vertex_model/data/penrose_lattice_data.pkl` or `.npz`
 **Output**:
-- `imgs/penrose_energy_spectrum.png` - Energy spectrum plot (DPI 200)
-- `imgs/penrose_dos.png` - Density of States plot (DPI 200)
-- `imgs/penrose_idos.png` - Integrated Density of States plot (DPI 200)
-- `imgs/penrose_wavefunctions_E0.png` - Zero-energy wavefunction plots (DPI 500)
+- `vertex_model/imgs/penrose_energy_spectrum.png` - Energy spectrum plot (DPI 200)
+- `vertex_model/imgs/penrose_dos.png` - Density of States plot (DPI 200)
+- `vertex_model/imgs/penrose_idos.png` - Integrated Density of States plot (DPI 200)
+- `vertex_model/imgs/penrose_wavefunctions_E0.png` - Zero-energy wavefunction plots (DPI 500)
 
 **New Features**:
 - Bipartite sublattice detection (BFS algorithm)
