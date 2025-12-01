@@ -261,6 +261,62 @@ class PenroseTightBinding:
         bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
         return bin_centers, hist
     
+    def calculate_ldos(self, energies: NDArray[np.float64], delta: float = 0.01) -> Dict[int, NDArray[np.float64]]:
+        """
+        Hitung Local Density of States (LDOS) untuk setiap coordination number z.
+        
+        Sesuai persamaan (42):
+        ρ_z(ω) = (1/L) Σ_k [Σ_{l:(z_l=z)} |u_{lk}|²] / [Σ_{l=1}^{L} |u_{lk}|²] δ(ℏω - ε_k)
+        
+        Delta function diimplementasikan sebagai:
+        δ(ω - ε_k) = 1 jika |ω - ε_k| < delta, 0 otherwise
+        
+        Input:
+            energies (NDArray): Array energi ω untuk evaluasi LDOS
+            delta (float): Threshold untuk delta function
+        
+        Output:
+            Dict[int, NDArray]: Dictionary z → ρ_z(ω)
+        """
+        # Get coordination numbers
+        coordination = self.get_coordination_numbers()
+        coord_array = np.array([coordination[i] for i in range(self.N)])
+        
+        # Get unique coordination numbers (filter z=2 to z=7)
+        all_z = sorted(set(coord_array))
+        z_values = [z for z in all_z if 2 <= z <= 7]
+        
+        # Initialize LDOS dictionary
+        ldos = {z: np.zeros(len(energies)) for z in z_values}
+        
+        L = self.N  # Total number of sites
+        
+        # Loop over each energy point ω
+        for i, omega in enumerate(energies):
+            # Find states k where |ω - ε_k| < delta (delta function condition)
+            state_mask = np.abs(self.eigenvalues - omega) < delta
+            state_indices = np.where(state_mask)[0]
+            
+            # Sum over all states that satisfy delta function
+            for k in state_indices:
+                psi_k = self.eigenvectors[:, k]
+                
+                # Normalization: Σ_l |u_{lk}|²
+                norm_sq = np.sum(np.abs(psi_k)**2)
+                
+                # For each coordination number z
+                for z in z_values:
+                    # Find sites with coordination number z
+                    site_mask = (coord_array == z)
+                    
+                    # Calculate: Σ_{l:(z_l=z)} |u_{lk}|² / Σ_l |u_{lk}|²
+                    weight = np.sum(np.abs(psi_k[site_mask])**2) / norm_sq
+                    
+                    # Add contribution: (1/L) * weight
+                    ldos[z][i] += weight / L
+        
+        return ldos
+    
     def get_statistics(self) -> Dict[str, float]:
         """
         Hitung statistik dari eigenvalues
@@ -305,6 +361,88 @@ class PenroseTightBinding:
             print(f"  ✓ Saved spectrum plot: {filename}")
         
         plt.close()
+    
+    def plot_ldos(self, n_points: int = 200, delta: float = 0.05, save_fig: bool = True,
+                  filename: str = 'vertex_model/imgs/penrose_ldos.png') -> None:
+        """
+        Plot Local Density of States (LDOS) sebagai stacked bar chart seperti Figure 12.
+        
+        Input:
+            n_points (int): Jumlah titik energi untuk evaluasi
+            delta (float): Threshold untuk delta function
+            save_fig (bool): Simpan figure ke file
+            filename (str): Nama file output
+        """
+        print(f"\n[LDOS] Calculating Local Density of States...")
+        print(f"  Using delta function threshold: δ = {delta}")
+        
+        # Create energy grid
+        E_min, E_max = np.min(self.eigenvalues), np.max(self.eigenvalues)
+        energies = np.linspace(E_min - 0.5, E_max + 0.5, n_points)
+        
+        # Calculate LDOS
+        ldos = self.calculate_ldos(energies=energies, delta=delta)
+        
+        # z values: stack dari z_max ke z_min (z=7 di bawah, z=2 di atas)
+        z_values_descending = sorted(ldos.keys(), reverse=True)  # [7, 6, 5, 4, 3, 2]
+        
+        # Define colors matching Figure 12 style
+        # z=2: gray, z=3: black, z=4: green, z=5: red, z=6: cyan, z=7: yellow
+        color_map = {
+            2: 'gray',
+            3: 'black', 
+            4: 'limegreen',
+            5: 'red',
+            6: 'cyan',
+            7: 'yellow',
+        }
+        
+        fig, ax = plt.subplots(1, 1, figsize=(10, 6))
+        
+        # Calculate bar width
+        bar_width = energies[1] - energies[0] if len(energies) > 1 else 0.1
+        
+        # Create stacked bar chart (z_max at bottom, z_min at top)
+        bottom = np.zeros(len(energies))
+        
+        for z in z_values_descending:
+            color = color_map.get(z, 'purple')
+            ax.bar(energies, ldos[z], width=bar_width, bottom=bottom, 
+                   color=color, label=f'z={z}', edgecolor='none')
+            bottom += ldos[z]
+        
+        # Set axis limits like Figure 12
+        ax.set_ylim(0, 0.1)
+        ax.set_xlim(-4.5, 4.5)
+        
+        # Labels and title
+        ax.set_xlabel(r'$\hbar\omega/t$', fontsize=14)
+        ax.set_ylabel(r'$\rho_z(\omega)$', fontsize=14)
+        ax.set_title(f'Site-resolved DOS (N={self.N}, Iteration={self.iteration})', 
+                     fontsize=14, fontweight='bold')
+        
+        # Legend (reverse order so z=2 appears first in legend, matching visual top-to-bottom)
+        handles, labels = ax.get_legend_handles_labels()
+        ax.legend(handles[::-1], labels[::-1], loc='upper right', fontsize=10, framealpha=0.9)
+        
+        plt.tight_layout()
+        
+        if save_fig:
+            plt.savefig(filename, dpi=300, bbox_inches='tight')
+            print(f"  ✓ Saved LDOS plot: {filename}")
+        
+        plt.close()
+        
+        # Print statistics
+        print(f"\n  LDOS Statistics (z=2 to z=7):")
+        coordination = self.get_coordination_numbers()
+        coord_array = np.array([coordination[i] for i in range(self.N)])
+        
+        for z in sorted(ldos.keys()):
+            n_z = np.sum(coord_array == z)
+            percentage = (n_z / self.N) * 100
+            peak_ldos = np.max(ldos[z])
+            print(f"    z={z}: {n_z:5d} sites ({percentage:5.2f}%), peak LDOS = {peak_ldos:.6f}")
     
     def plot_density_of_states(self, bins: int = 100, save_fig: bool = True, 
                                 filename: str = 'vertex_model/imgs/penrose_dos.png') -> None:
@@ -447,6 +585,22 @@ class PenroseTightBinding:
                             queue.append(v)
         
         return sublattice_map
+    
+    def get_coordination_numbers(self) -> Dict[int, int]:
+        """
+        Hitung coordination number (jumlah tetangga) untuk setiap site.
+        
+        Output:
+            Dict[int, int]: Peta site_id → coordination number (z)
+        """
+        coordination = {i: 0 for i in range(self.N)}
+        
+        # Hitung tetangga untuk setiap site
+        for (i, j) in self.edges.keys():
+            coordination[i] += 1
+            coordination[j] += 1
+        
+        return coordination
     
     def analyze_wavefunction(self, state_index: int) -> Dict[str, any]:
         """
@@ -634,6 +788,7 @@ def main() -> None:
     
     tb_model.plot_energy_spectrum(save_fig=True)
     tb_model.plot_density_of_states(bins=tb_model.N, save_fig=True)
+    tb_model.plot_ldos(n_points=200, delta=0.05, save_fig=True)
     tb_model.plot_integrated_dos(save_fig=True)
 
     # Build adjacency list to count neighbors
@@ -650,8 +805,27 @@ def main() -> None:
     z_distribution = Counter(coordination_numbers.values())
     
     # Find zero-energy states (E ≈ 0)
-    energy_threshold = 1e-7
-    zero_energy_indices = np.where(np.abs(tb_model.eigenvalues) < energy_threshold)[0]
+    target_energy = 0.0
+    energy_threshold = 0.01  # Threshold untuk menghitung fraksi state di E=0
+    
+    # Hitung fraksi state di sekitar E=0
+    states_near_E0 = np.sum(np.abs(tb_model.eigenvalues - target_energy) < energy_threshold)
+    total_states = tb_model.N
+    fraction_E0 = states_near_E0 / total_states
+    
+    print("\n")
+    print_separator()
+    print("STATE FRACTION ANALYSIS AT E ≈ 0")
+    print_separator()
+    
+    print(f"\nState Fraction Analysis (E = {target_energy} ± {energy_threshold}):")
+    print(f"  N (states near E=0):  {states_near_E0}")
+    print(f"  N₀ (total states):    {total_states}")
+    print(f"  f = N/N₀:             {fraction_E0:.6f} ({fraction_E0*100:.4f}%)")
+    
+    # Find exact zero-energy states for detailed analysis
+    zero_threshold = 1e-7
+    zero_energy_indices = np.where(np.abs(tb_model.eigenvalues) < zero_threshold)[0]
     
     if len(zero_energy_indices) == 0:
         # Find closest states to E=0
@@ -667,8 +841,7 @@ def main() -> None:
     
     if len(zero_energy_indices) > 0:
         print(f"\nAnalyzing {len(zero_energy_indices)} states with E ≈ 0...")
-        
-        # Convert coordination_numbers dict to array
+                # Convert coordination_numbers dict to array
         neighbor_counts = np.array([coordination_numbers[i] for i in range(tb_model.N)])
         
         # Get zero-energy eigenvectors

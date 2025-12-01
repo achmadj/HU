@@ -304,8 +304,8 @@ class CenterPenroseTightBinding:
             ax.add_collection(lc)
         
         # Size and color thresholds
-        size_threshold = 1e-16
-        color_threshold = 1e-7
+        size_threshold = 1e-15
+        color_threshold = 1e-9
         
         # Compute sizes
         sizes = np.where(prob_density < size_threshold, 0.01,
@@ -392,17 +392,34 @@ def main() -> None:
     print_separator()
     
     target_energy = 2.0
+    energy_threshold = 0.01  # Threshold untuk menghitung fraksi state di E=2
+    
+    # Hitung fraksi state di sekitar E=2
+    states_near_E2 = np.sum(np.abs(tb_model.eigenvalues - target_energy) < energy_threshold)
+    total_states = tb_model.N
+    fraction_E2 = states_near_E2 / total_states
+    
+    print(f"\nState Fraction Analysis (E = {target_energy} ± {energy_threshold}):")
+    print(f"  N (states near E=2):  {states_near_E2}")
+    print(f"  N₀ (total states):    {total_states}")
+    print(f"  f = N/N₀:             {fraction_E2:.6f} ({fraction_E2*100:.4f}%)")
+    
+    # Find closest state
     energy_diff = np.abs(tb_model.eigenvalues - target_energy)
     sorted_indices = np.argsort(energy_diff)
     
-    # Ambil 1 state terdekat ke E=2
     closest_idx = sorted_indices[0]
     closest_energy = tb_model.eigenvalues[closest_idx]
     
-    print(f"\nFound closest state to E = {target_energy}:")
+    print(f"\nClosest state to E = {target_energy}:")
     print(f"  State {closest_idx}: E = {closest_energy:.6f}")
     
     # Plot wavefunction untuk state di E≈2
+    print("\n")
+    print_separator()
+    print("WAVEFUNCTION VISUALIZATION")
+    print_separator()
+    
     fig, ax = plt.subplots(1, 1, figsize=(10, 10))
     
     tb_model.plot_wavefunction(closest_idx, ax)
