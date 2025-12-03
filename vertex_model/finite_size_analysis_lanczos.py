@@ -31,9 +31,9 @@ class FiniteSizeAnalyzerLanczos:
             Dict dengan N, coordination distribution, dan localization
         """
         # Load data
-        filename = 'data/penrose_lattice_data.npz'
+        filename = 'vertex_model/data/penrose_lattice_data.npz'
         if iteration is not None:
-            filename = f'data/penrose_lattice_iter{iteration}.npz'
+            filename = f'vertex_model/data/penrose_lattice_iter{iteration}.npz'
         
         try:
             data = np.load(filename)
@@ -224,9 +224,9 @@ class FiniteSizeAnalyzerLanczos:
             Dict dengan LDOS per coordination number
         """
         # Load data
-        filename = 'data/penrose_lattice_data.npz'
+        filename = 'vertex_model/data/penrose_lattice_data.npz'
         if iteration is not None:
-            filename = f'data/penrose_lattice_iter{iteration}.npz'
+            filename = f'vertex_model/data/penrose_lattice_iter{iteration}.npz'
         
         try:
             data = np.load(filename)
