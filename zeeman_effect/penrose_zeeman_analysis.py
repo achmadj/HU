@@ -25,6 +25,13 @@ def load_penrose_data(filename):
     edge_list = data['edge_list']
     N = int(data['N'])
     E = int(data['E'])
+    
+    # Rotate vertices 18 degrees clockwise (negative angle)
+    angle = -18 * np.pi / 180  # Convert to radians, negative for clockwise
+    cos_a, sin_a = np.cos(angle), np.sin(angle)
+    rotation_matrix = np.array([[cos_a, -sin_a], [sin_a, cos_a]])
+    vertex_coords = vertex_coords @ rotation_matrix.T
+    
     return vertex_coords, edge_list, N, E
 
 
@@ -164,6 +171,61 @@ def calculate_local_spin_density(eigenvectors, N, num_filled_states=None):
     return local_Sz
 
 
+def compute_bipartite_sublattices(edge_list, N):
+    """
+    Compute bipartite sublattice assignment using BFS.
+    Penrose lattice is bipartite, so it can be divided into two sublattices
+    where no edge connects sites in the same sublattice.
+    
+    Returns:
+        sublattice_labels: Array of length N with 'A' or 'B' for each site
+    """
+    from collections import deque
+    
+    # Build adjacency list
+    adjacency = {i: set() for i in range(N)}
+    for (i, j) in edge_list:
+        adjacency[i].add(j)
+        adjacency[j].add(i)
+    
+    # Initialize sublattice map
+    sublattice_labels = [''] * N
+    queue = deque()
+    
+    # Start from site 0
+    sublattice_labels[0] = 'A'
+    queue.append(0)
+    
+    # BFS traversal
+    while queue:
+        u = queue.popleft()
+        label_u = sublattice_labels[u]
+        opposite_label = 'B' if label_u == 'A' else 'A'
+        
+        for v in adjacency[u]:
+            if sublattice_labels[v] == '':
+                sublattice_labels[v] = opposite_label
+                queue.append(v)
+    
+    # Handle disconnected components
+    for i in range(N):
+        if sublattice_labels[i] == '':
+            sublattice_labels[i] = 'A'
+            queue.append(i)
+            
+            while queue:
+                u = queue.popleft()
+                label_u = sublattice_labels[u]
+                opposite_label = 'B' if label_u == 'A' else 'A'
+                
+                for v in adjacency[u]:
+                    if sublattice_labels[v] == '':
+                        sublattice_labels[v] = opposite_label
+                        queue.append(v)
+    
+    return np.array(sublattice_labels)
+
+
 def find_edge_sites(vertex_coords, percentile=85):
     """
     Identify edge sites based on radial distance from center
@@ -178,46 +240,42 @@ def find_edge_sites(vertex_coords, percentile=85):
     return edge_mask
 
 
-def plot_probability_density_map(vertex_coords, prob_density, title, 
-                                  save_path=None, vmax=None, edge_mask=None):
+def plot_probability_density_map(vertex_coords, prob_density, sublattice_labels, title, 
+                                  save_path=None, vmax=None, edge_mask=None,
+                                  threshold_ratio=1e-9):
     """
-    Plot probability density |psi_i|^2 on Penrose lattice
+    Plot probability density |psi_i|^2 on Penrose lattice with heatmap
     
     Parameters:
         vertex_coords: (N, 2) array of positions
         prob_density: (N,) array of probability at each site
+        sublattice_labels: Array of 'A' or 'B' for each site (not used in heatmap)
         title: Plot title
         save_path: Path to save figure
         vmax: Maximum value for colorbar
         edge_mask: Boolean array marking edge sites
+        threshold_ratio: Sites with prob_density < threshold_ratio * max are not plotted
     """
     fig, ax = plt.subplots(1, 1, figsize=(10, 10))
-    
-    # Plot edges (light gray background)
-    # Note: We don't have edge_list here, so skip for now
     
     # Plot probability density
     if vmax is None:
         vmax = np.max(prob_density)
     
-    scatter = ax.scatter(vertex_coords[:, 0], vertex_coords[:, 1], 
-                        c=prob_density, cmap='hot', s=50, 
-                        vmin=0, vmax=vmax, edgecolors='black', linewidths=0.3)
+    # Filter out sites with values close to zero
+    threshold = threshold_ratio * vmax
+    significant_mask = prob_density >= threshold
     
-    # Mark edge sites if provided
-    if edge_mask is not None:
-        edge_coords = vertex_coords[edge_mask]
-        ax.scatter(edge_coords[:, 0], edge_coords[:, 1], 
-                  marker='o', s=80, facecolors='none', 
-                  edgecolors='cyan', linewidths=2, label='Edge sites')
+    # Plot sites with significant probability using heatmap
+    scatter = ax.scatter(vertex_coords[significant_mask, 0], vertex_coords[significant_mask, 1], 
+                        c=prob_density[significant_mask], cmap='hot', s=20, 
+                        vmin=0, vmax=vmax, edgecolors='black', linewidths=0.2)
     
     plt.colorbar(scatter, ax=ax, label='Probability Density $|\\psi_i|^2$')
     ax.set_aspect('equal')
     ax.set_xlabel('x', fontsize=12)
     ax.set_ylabel('y', fontsize=12)
     ax.set_title(title, fontsize=14, fontweight='bold')
-    if edge_mask is not None:
-        ax.legend(loc='upper right')
     ax.grid(True, alpha=0.2)
     
     plt.tight_layout()
@@ -229,16 +287,26 @@ def plot_probability_density_map(vertex_coords, prob_density, title,
     plt.close()
 
 
-def plot_local_spin_density(vertex_coords, local_Sz, zeeman, iteration, save_dir):
-    """Plot local spin density <S_z_i> map"""
+def plot_local_spin_density(vertex_coords, local_Sz, zeeman, iteration, save_dir, 
+                            threshold_ratio=1e-9):
+    """Plot local spin density <S_z_i> map
+    
+    Parameters:
+        threshold_ratio: Sites with |local_Sz| < threshold_ratio * max are not plotted
+    """
     fig, ax = plt.subplots(1, 1, figsize=(10, 10))
     
     # Use diverging colormap centered at zero
     vmax = max(abs(np.min(local_Sz)), abs(np.max(local_Sz)))
     
-    scatter = ax.scatter(vertex_coords[:, 0], vertex_coords[:, 1], 
-                        c=local_Sz, cmap='RdBu_r', s=50, 
-                        vmin=-vmax, vmax=vmax, edgecolors='black', linewidths=0.3)
+    # Filter out sites with values close to zero
+    threshold = threshold_ratio * vmax
+    significant_mask = np.abs(local_Sz) >= threshold
+    
+    # Plot only significant sites
+    scatter = ax.scatter(vertex_coords[significant_mask, 0], vertex_coords[significant_mask, 1], 
+                        c=local_Sz[significant_mask], cmap='RdBu_r', s=20, 
+                        vmin=-vmax, vmax=vmax, edgecolors='black', linewidths=0.2)
     
     plt.colorbar(scatter, ax=ax, label='Local Spin Density $\\langle S_z^i \\rangle$')
     ax.set_aspect('equal')
@@ -259,29 +327,45 @@ def plot_local_spin_density(vertex_coords, local_Sz, zeeman, iteration, save_dir
 
 
 def plot_dos_with_peaks(energies, dos, peak_energies, zeeman, iteration, save_dir):
-    """Plot DOS with marked peak energies"""
+    """Plot DOS with two main peaks marked from eigenvalue degeneracy"""
     fig, ax = plt.subplots(1, 1, figsize=(12, 6))
     
-    ax.plot(energies, dos, linewidth=2, color='darkblue', label='DOS')
+    ax.plot(energies, dos, linewidth=2, color='darkblue')
     ax.fill_between(energies, dos, alpha=0.3, color='blue')
     
-    # Mark peak energies
-    for i, E_peak in enumerate(peak_energies):
-        ax.axvline(x=E_peak, color='red', linestyle='--', linewidth=1.5, 
-                   alpha=0.7, label=f'Peak {i+1}: E={E_peak:.3f}' if i < 5 else '')
-    
-    ax.axvline(x=0, color='green', linestyle=':', linewidth=2, alpha=0.7, label='E=0')
+    # Sort peaks by DOS value to get the two highest peaks
+    # peak_energies is already from find_degenerate_energy_peaks
+    if len(peak_energies) >= 2:
+        # Get DOS values at each peak energy
+        peak_dos_values = []
+        for E_peak in peak_energies:
+            idx = np.argmin(np.abs(energies - E_peak))
+            peak_dos_values.append(dos[idx])
+        
+        # Sort by DOS value (highest first)
+        sorted_indices = np.argsort(peak_dos_values)[::-1]
+        top_peaks = [peak_energies[i] for i in sorted_indices[:2]]
+        top_peaks.sort()  # Sort by energy (lower first)
+        
+        # Mark first peak (lower energy)
+        colors = ['red', 'blue']
+        for i, E_peak in enumerate(top_peaks):
+            ax.axvline(x=E_peak, color=colors[i], linestyle='--', linewidth=2, alpha=0.8, 
+                       label=f'Peak {i+1}: E = {E_peak:.4f}')
+    elif len(peak_energies) == 1:
+        ax.axvline(x=peak_energies[0], color='red', linestyle='--', linewidth=2, alpha=0.8, 
+                   label=f'Peak: E = {peak_energies[0]:.4f}')
     
     ax.set_xlabel('Energy', fontsize=12)
     ax.set_ylabel('DOS (states/energy)', fontsize=12)
-    ax.set_title(f'Density of States with Peak Markers\n(Iteration {iteration}, Z={zeeman:.3f})', 
+    ax.set_title(f'Density of States\n(Iteration {iteration}, Z={zeeman:.3f})', 
                  fontsize=13, fontweight='bold')
     ax.grid(True, alpha=0.3)
-    ax.legend(loc='upper right', fontsize=9)
+    ax.legend(loc='upper right', fontsize=11)
     
     plt.tight_layout()
     
-    filename = f'dos_peaks_Z{zeeman:.3f}_iter{iteration}.png'
+    filename = f'dos_Z{zeeman:.3f}_iter{iteration}.png'
     filepath = os.path.join(save_dir, filename)
     plt.savefig(filepath, dpi=300, bbox_inches='tight')
     print(f"  ✓ Saved: {filepath}")
@@ -289,50 +373,79 @@ def plot_dos_with_peaks(energies, dos, peak_energies, zeeman, iteration, save_di
     plt.close()
 
 
-def analyze_states_near_energy(eigenvalues, eigenvectors, vertex_coords, 
-                               target_energy, energy_window, N, zeeman, 
-                               iteration, save_dir, edge_mask):
+def find_highest_edge_localized_states(eigenvalues, eigenvectors, N, edge_mask):
     """
-    Analyze and plot probability density for states near target energy
+    Loop through all eigenstates and find states with highest edge localization
+    in E- (negative energy) and E+ (positive energy) regions.
+    
+    Returns:
+        best_neg_idx: State index with highest edge localization at E < 0
+        best_pos_idx: State index with highest edge localization at E > 0
+        edge_localizations: Array of edge localization percentages for all states
     """
-    # Find states within energy window
-    mask = np.abs(eigenvalues - target_energy) < energy_window
-    state_indices = np.where(mask)[0]
+    num_states = len(eigenvalues)
+    edge_localizations = np.zeros(num_states)
     
-    if len(state_indices) == 0:
-        print(f"  ⚠ No states found near E={target_energy:.3f}")
-        return
-    
-    print(f"\n  Found {len(state_indices)} states near E={target_energy:.3f} ± {energy_window:.3f}")
-    print(f"    State indices: {state_indices[:10]}{'...' if len(state_indices) > 10 else ''}")
-    print(f"    Energies: {eigenvalues[state_indices[:5]]}")
-    
-    # Plot probability density for first few states
-    num_states_to_plot = min(3, len(state_indices))
-    
-    for i in range(num_states_to_plot):
-        state_idx = state_indices[i]
+    # Calculate edge localization for all states
+    for state_idx in range(num_states):
         psi = eigenvectors[:, state_idx]
-        
-        # Total probability density (spin-up + spin-down)
         prob_density = np.abs(psi[:N])**2 + np.abs(psi[N:])**2
-        
-        # Check edge localization
         edge_prob = np.sum(prob_density[edge_mask])
         total_prob = np.sum(prob_density)
-        edge_percentage = 100 * edge_prob / total_prob
-        
-        title = f'State #{state_idx}: E={eigenvalues[state_idx]:.4f}\n'
-        title += f'Edge localization: {edge_percentage:.1f}% | Z={zeeman:.3f}'
-        
-        filename = f'prob_density_E{target_energy:.2f}_state{i}_Z{zeeman:.3f}_iter{iteration}.png'
-        filepath = os.path.join(save_dir, filename)
-        
-        plot_probability_density_map(vertex_coords, prob_density, title, 
-                                    filepath, edge_mask=edge_mask)
-        
-        print(f"    State {state_idx}: E={eigenvalues[state_idx]:.4f}, "
-              f"Edge localization={edge_percentage:.1f}%")
+        edge_localizations[state_idx] = 100 * edge_prob / total_prob
+    
+    # Find best state in E- region (negative energies)
+    neg_mask = eigenvalues < 0
+    if np.any(neg_mask):
+        neg_indices = np.where(neg_mask)[0]
+        best_neg_local_idx = np.argmax(edge_localizations[neg_mask])
+        best_neg_idx = neg_indices[best_neg_local_idx]
+    else:
+        best_neg_idx = None
+    
+    # Find best state in E+ region (positive energies)
+    pos_mask = eigenvalues > 0
+    if np.any(pos_mask):
+        pos_indices = np.where(pos_mask)[0]
+        best_pos_local_idx = np.argmax(edge_localizations[pos_mask])
+        best_pos_idx = pos_indices[best_pos_local_idx]
+    else:
+        best_pos_idx = None
+    
+    return best_neg_idx, best_pos_idx, edge_localizations
+
+
+def plot_state_probability_density(state_idx, eigenvalues, eigenvectors, vertex_coords, 
+                                   N, zeeman, iteration, save_dir, edge_mask, 
+                                   sublattice_labels, edge_localizations, label):
+    """
+    Plot probability density for a specific state
+    """
+    actual_energy = eigenvalues[state_idx]
+    psi = eigenvectors[:, state_idx]
+    
+    # Total probability density (spin-up + spin-down)
+    prob_density = np.abs(psi[:N])**2 + np.abs(psi[N:])**2
+    
+    # Calculate spin polarization for this state
+    spin_up_prob = np.sum(np.abs(psi[:N])**2)
+    spin_down_prob = np.sum(np.abs(psi[N:])**2)
+    polarization = (spin_up_prob - spin_down_prob) / (spin_up_prob + spin_down_prob)
+    
+    edge_percentage = edge_localizations[state_idx]
+    
+    title = f'State #{state_idx} ({label}): E={actual_energy:.4f}\n'
+    title += f'Edge localization: {edge_percentage:.1f}% | Z={zeeman:.3f}'
+    
+    filename = f'prob_density_{label}_E{actual_energy:.4f}_Z{zeeman:.3f}_iter{iteration}.png'
+    filepath = os.path.join(save_dir, filename)
+    
+    plot_probability_density_map(vertex_coords, prob_density, sublattice_labels, title, 
+                                filepath, edge_mask=edge_mask)
+    
+    print(f"  ✓ {label} State {state_idx}: E={actual_energy:.4f}")
+    print(f"    Edge localization: {edge_percentage:.1f}%")
+    print(f"    Spin polarization: P = {polarization:.6f} (↑: {spin_up_prob:.4f}, ↓: {spin_down_prob:.4f})")
 
 
 def run_single_zeeman_analysis(zeeman, iteration, data_dir, save_dir, edge_percentile=85):
@@ -347,6 +460,12 @@ def run_single_zeeman_analysis(zeeman, iteration, data_dir, save_dir, edge_perce
     filename = os.path.join(data_dir, f'penrose_lattice_iter{iteration}.npz')
     vertex_coords, edge_list, N, E = load_penrose_data(filename)
     print(f"  ✓ Vertices: {N}, Edges: {E}")
+    
+    # Compute bipartite sublattice labels
+    sublattice_labels = compute_bipartite_sublattices(edge_list, N)
+    num_A = np.sum(sublattice_labels == 'A')
+    num_B = np.sum(sublattice_labels == 'B')
+    print(f"  ✓ Bipartite: Sublattice A={num_A}, Sublattice B={num_B}")
     
     # Build Hamiltonian
     print(f"\n[2/6] Building Hamiltonian...")
@@ -393,21 +512,29 @@ def run_single_zeeman_analysis(zeeman, iteration, data_dir, save_dir, edge_perce
     num_edge = np.sum(edge_mask)
     print(f"  ✓ Edge sites: {num_edge} ({100*num_edge/N:.1f}%)")
     
-    # Analyze states near each peak energy
-    print(f"\n[6/6] Analyzing states near peak energies...")
-    energy_window = 0.05  # Energy window for finding nearby states
+    # Analyze states: find highest edge localized states in E- and E+ regions
+    print(f"\n[6/6] Finding states with highest edge localization...")
     
-    # Always analyze states near E=0
-    analyze_states_near_energy(eigenvalues, eigenvectors, vertex_coords, 
-                              0.0, energy_window, N, zeeman, iteration, 
-                              save_dir, edge_mask)
+    # Calculate edge localization for all states
+    best_neg_idx, best_pos_idx, edge_localizations = find_highest_edge_localized_states(
+        eigenvalues, eigenvectors, N, edge_mask
+    )
     
-    # Analyze states near DOS peaks (up to 3 peaks)
-    for i, E_peak in enumerate(peak_energies[:3]):
-        if abs(E_peak) > 0.1:  # Skip if too close to E=0 (already analyzed)
-            analyze_states_near_energy(eigenvalues, eigenvectors, vertex_coords, 
-                                      E_peak, energy_window, N, zeeman, 
-                                      iteration, save_dir, edge_mask)
+    print(f"  ✓ Calculated edge localization for all {len(eigenvalues)} states")
+    
+    # Plot state with highest edge localization in E- region
+    if best_neg_idx is not None:
+        print(f"\n  [E- region] Best edge-localized state:")
+        plot_state_probability_density(best_neg_idx, eigenvalues, eigenvectors, vertex_coords,
+                                       N, zeeman, iteration, save_dir, edge_mask,
+                                       sublattice_labels, edge_localizations, "E-")
+    
+    # Plot state with highest edge localization in E+ region
+    if best_pos_idx is not None:
+        print(f"\n  [E+ region] Best edge-localized state:")
+        plot_state_probability_density(best_pos_idx, eigenvalues, eigenvectors, vertex_coords,
+                                       N, zeeman, iteration, save_dir, edge_mask,
+                                       sublattice_labels, edge_localizations, "E+")
     
     return M_tot, local_Sz, eigenvalues
 
