@@ -242,7 +242,7 @@ def find_edge_sites(vertex_coords, percentile=85):
 
 def plot_probability_density_map(vertex_coords, prob_density, sublattice_labels, title, 
                                   save_path=None, vmax=None, edge_mask=None,
-                                  threshold_ratio=1e-9):
+                                  threshold=1e-9, edge_list=None):
     """
     Plot probability density |psi_i|^2 on Penrose lattice with heatmap
     
@@ -254,16 +254,23 @@ def plot_probability_density_map(vertex_coords, prob_density, sublattice_labels,
         save_path: Path to save figure
         vmax: Maximum value for colorbar
         edge_mask: Boolean array marking edge sites
-        threshold_ratio: Sites with prob_density < threshold_ratio * max are not plotted
+        threshold: Sites with prob_density < threshold are not plotted (default: 1e-6)
+        edge_list: Array of edges to draw lattice structure
     """
     fig, ax = plt.subplots(1, 1, figsize=(10, 10))
+    
+    # Draw edges (lattice structure)
+    if edge_list is not None:
+        for i, j in edge_list:
+            x = [vertex_coords[i, 0], vertex_coords[j, 0]]
+            y = [vertex_coords[i, 1], vertex_coords[j, 1]]
+            ax.plot(x, y, 'k-', linewidth=0.3, alpha=0.3)
     
     # Plot probability density
     if vmax is None:
         vmax = np.max(prob_density)
     
-    # Filter out sites with values close to zero
-    threshold = threshold_ratio * vmax
+    # Filter out sites with probability density below threshold
     significant_mask = prob_density >= threshold
     
     # Plot sites with significant probability using heatmap
@@ -417,7 +424,7 @@ def find_highest_edge_localized_states(eigenvalues, eigenvectors, N, edge_mask):
 
 def plot_state_probability_density(state_idx, eigenvalues, eigenvectors, vertex_coords, 
                                    N, zeeman, iteration, save_dir, edge_mask, 
-                                   sublattice_labels, edge_localizations, label):
+                                   sublattice_labels, edge_localizations, label, edge_list=None):
     """
     Plot probability density for a specific state
     """
@@ -441,7 +448,7 @@ def plot_state_probability_density(state_idx, eigenvalues, eigenvectors, vertex_
     filepath = os.path.join(save_dir, filename)
     
     plot_probability_density_map(vertex_coords, prob_density, sublattice_labels, title, 
-                                filepath, edge_mask=edge_mask)
+                                filepath, edge_mask=edge_mask, edge_list=edge_list)
     
     print(f"  ✓ {label} State {state_idx}: E={actual_energy:.4f}")
     print(f"    Edge localization: {edge_percentage:.1f}%")
@@ -527,14 +534,14 @@ def run_single_zeeman_analysis(zeeman, iteration, data_dir, save_dir, edge_perce
         print(f"\n  [E- region] Best edge-localized state:")
         plot_state_probability_density(best_neg_idx, eigenvalues, eigenvectors, vertex_coords,
                                        N, zeeman, iteration, save_dir, edge_mask,
-                                       sublattice_labels, edge_localizations, "E-")
+                                       sublattice_labels, edge_localizations, "E-", edge_list=edge_list)
     
     # Plot state with highest edge localization in E+ region
     if best_pos_idx is not None:
         print(f"\n  [E+ region] Best edge-localized state:")
         plot_state_probability_density(best_pos_idx, eigenvalues, eigenvectors, vertex_coords,
                                        N, zeeman, iteration, save_dir, edge_mask,
-                                       sublattice_labels, edge_localizations, "E+")
+                                       sublattice_labels, edge_localizations, "E+", edge_list=edge_list)
     
     return M_tot, local_Sz, eigenvalues
 
